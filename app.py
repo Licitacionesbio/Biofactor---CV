@@ -1,12 +1,17 @@
 import streamlit as st
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from crear_base import Candidato, Vacante, Postulacion
+# Importamos 'Base' que viene desde tu archivo crear_base
+from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
 
 # Conexión limpia a la base de datos
 engine = create_engine('sqlite:///bolsa_empleo.db')
+
+# --- ESTA LÍNEA MÁGICA CREA EL ARCHIVO VACÍO SI NO EXISTE ---
+Base.metadata.create_all(engine)
+
 Session = sessionmaker(bind=engine)
 session = Session()
 
@@ -43,9 +48,9 @@ with tab1:
     col1, col2 = st.columns([1, 2])
     
     with col1:
-       st.subheader("🎯 Puestos Activos")
-    for vac in session.query(Vacante).all():
-        st.info(f"**{vac.titulo}**\n\nSector: *{vac.departamento}*")
+        st.subheader("🎯 Puestos Activos")
+        for vac in session.query(Vacante).all():
+            st.info(f"**{vac.titulo}**\n\nSector: *{vac.departamento}*")
         
     with col2:
         st.subheader("👤 Postulantes")
@@ -116,7 +121,7 @@ with tab2:
                         
                         session.add(Postulacion(candidato_id=nuevo_c.id, vacante_id=opciones_vacantes[puesto_sel], estado_proceso="CV Recibido", notas="CV subido al sistema Biofactor."))
                         session.commit()
-                        st.success(f"¡{nom} registrado con éxito!")
+                        st.success(f"¡{nom} registered con éxito!")
                         st.rerun()
             except Exception as e:
                 st.error(f"Error al procesar: {e}")
