@@ -7,7 +7,6 @@ import re
 
 # Conexión limpia a la base de datos
 engine = create_engine('sqlite:///bolsa_empleo.db')
-Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
 
