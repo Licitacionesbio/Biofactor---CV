@@ -1,7 +1,6 @@
 import streamlit as st
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-# Importamos 'Base' que viene desde tu archivo crear_base
 from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
@@ -9,7 +8,7 @@ import re
 # Conexión limpia a la base de datos
 engine = create_engine('sqlite:///bolsa_empleo.db')
 
-# --- ESTA LÍNEA MÁGICA CREA EL ARCHIVO VACÍO SI NO EXISTE ---
+# Esta línea detectará la nueva columna y la sumará si no existe
 Base.metadata.create_all(engine)
 
 Session = sessionmaker(bind=engine)
@@ -47,33 +46,24 @@ with tab1:
     
     col1, col2 = st.columns([1, 2])
     
-    # Inicializamos la memoria de qué puesto está seleccionado (empieza en "Todos")
     if "puesto_seleccionado" not in st.session_state:
         st.session_state.puesto_seleccionado = None
 
     with col1:
         st.subheader("🎯 Puestos Activos")
-        
-        # Botón para volver a ver todos los postulantes juntos
         if st.button("✨ Ver Todos los Postulantes", use_container_width=True):
             st.session_state.puesto_seleccionado = None
             st.rerun()
             
         st.write("---")
-        
-        # Listamos los puestos como botones dinámicos
         for vac in session.query(Vacante).all():
-            # Si está seleccionado, le ponemos un indicador visual
             es_activo = st.session_state.puesto_seleccionado == vac.id
             label_boton = f"📌 {vac.titulo} ({vac.departamento})" if es_activo else f"{vac.titulo} ({vac.departamento})"
-            
-            # El botón cambia el estado de la app al tocarlo
             if st.button(label_boton, key=f"btn_vac_{vac.id}", use_container_width=True, type="primary" if es_activo else "secondary"):
                 st.session_state.puesto_seleccionado = vac.id
                 st.rerun()
         
     with col2:
-        # Cambiamos el título dinámicamente según el filtro activo
         if st.session_state.puesto_seleccionado:
             vac_actual = session.query(Vacante).filter(Vacante.id == st.session_state.puesto_seleccionado).first()
             if vac_actual:
@@ -84,7 +74,6 @@ with tab1:
             st.subheader("👤 Todos los Postulantes")
             
         for post in session.query(Postulacion).all():
-            # FILTRO 1: Si hay un puesto seleccionado en col1, salteamos los que no coincidan
             if st.session_state.puesto_seleccionado and post.vacante_id != st.session_state.puesto_seleccionado:
                 continue
                 
@@ -92,7 +81,6 @@ with tab1:
             vac = session.query(Vacante).filter(Vacante.id == post.vacante_id).first()
             
             if cand and vac:
-                # FILTRO 2: Buscador por palabra clave en tiempo real
                 dir_texto = cand.direccion if cand.direccion else ""
                 texto_completo = f"{cand.nombre} {cand.email} {str(post.notas)} {vac.titulo} {dir_texto}".lower()
                 if busqueda.lower() not in texto_completo:
@@ -102,20 +90,31 @@ with tab1:
                     st.write(f"📧 **Email:** {cand.email} | 📞 **Teléfono:** {cand.telefono}")
                     st.write(f"📍 **Ubicación / Barrio:** {cand.direccion if cand.direccion else 'No especificado'}")
                     
-                    # Formulario individual de actualización rápida con NOTAS
+                    # --- BOTÓN DE DESCARGA DIRECTA DEL CV ---
+                    if cand.archivo_cv:
+                        st.download_button(
+                            label="📥 Descargar CV (PDF)",
+                            data=cand.archivo_cv,
+                            file_name=f"CV_{cand.nombre.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            key=f"dl_{cand.id}"
+                        )
+                    else:
+                        st.info("No hay un archivo PDF guardado para este candidato.")
+                    
+                    st.write("---")
+                    
+                    # Formulario individual de actualización rápida
                     with st.form(key=f"form_update_{post.id}"):
-                        # Se agregó "Contratado" al final de la lista de estados
-                        estados = ["CV Recibido", "Entrevista RRHH", "Entrevista Manager", "Oferta", "Rechazado", "Contratado"]
+                        estados = ["CV Recibido", "Entrevista RRHH", "Prueba Técnica", "Entrevista Manager", "Oferta", "Rechazado", "Contratado"]
                         idx_actual = estados.index(post.estado_proceso) if post.estado_proceso in estados else 0
                         
                         nuevo_est = st.selectbox("Cambiar Etapa:", estados, index=idx_actual)
-                        
                         notas_actuales = post.notas if post.notas else ""
                         nuevas_notas = st.text_area("Notas / Comentarios del candidato:", value=notas_actuales, placeholder="Escribe aquí el feedback...")
                         
                         if st.form_submit_button("Guardar Cambios"):
                             post.estado_proceso = nuevo_est
-                            post.notes_or_field = nuevas_notas
                             post.notas = nuevas_notas
                             session.commit()
                             st.success("¡Candidato actualizado!")
@@ -137,6 +136,9 @@ with tab2:
         
         if archivo is not None:
             try:
+                # Extraemos los bytes puros del PDF subido
+                bytes_pdf = archivo.getvalue()
+                
                 lector = pypdf.PdfReader(archivo)
                 texto_cv = "".join([pagina.extract_text() + "\n" for pagina in lector.pages])
                 
@@ -155,7 +157,15 @@ with tab2:
                     direccion = st.text_input("Dirección / Barrio / Localidad:", value=dir_sug)
                     
                     if st.form_submit_button("Confirmar Postulación") and nom and email:
-                        nuevo_c = Candidato(nombre=nom, email=email, telefono=telef, direccion=direccion)
+                        # Guardamos los bytes en archivo_cv y mantenemos la compatibilidad anterior
+                        nuevo_c = Candidato(
+                            nombre=nom, 
+                            email=email, 
+                            telefono=telef, 
+                            direccion=direccion, 
+                            archivo_cv=bytes_pdf,
+                            ruta_cv=archivo.name
+                        )
                         session.add(nuevo_c)
                         session.flush()
                         
