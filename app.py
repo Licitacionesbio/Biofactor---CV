@@ -9,6 +9,7 @@ import re
 engine = create_engine('sqlite:///bolsa_empleo.db')
 Session = sessionmaker(bind=engine)
 session = Session()
+Base.metadata.create_all(engine)
 
 st.set_page_config(page_title="Biofactor", layout="wide")
 st.image("logo.png", width=120)
