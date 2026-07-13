@@ -17,6 +17,9 @@ class Candidato(Base):
     linkedin = Column(String(200))
     ruta_cv = Column(String(250))  # Aquí guardaremos la ubicación de su PDF
     
+    # --- NUEVA COLUMNA AGREGADA ---
+    direccion = Column(String(200))  # Aquí guardamos la dirección/barrio/localidad
+    
     # Relación con las postulaciones
     postulaciones = relationship("Postulacion", back_populates="candidato")
 
