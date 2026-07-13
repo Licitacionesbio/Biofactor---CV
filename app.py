@@ -11,7 +11,8 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 st.set_page_config(page_title="Biofactor", layout="wide")
-st.title("💼 Biofactor: vacante y postulantes")
+st.image("logo.png", width=120)
+st.title("Biofactor: vacante y postulantes")
 st.markdown("---")
 
 # Navegación por pestañas
