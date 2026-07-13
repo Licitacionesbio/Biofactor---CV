@@ -92,13 +92,16 @@ with tab1:
             vac = session.query(Vacante).filter(Vacante.id == post.vacante_id).first()
             
             if cand and vac:
-                # FILTRO 2: Buscador por palabra clave en tiempo real
-                texto_completo = f"{cand.nombre} {cand.email} {str(post.notas)} {vac.titulo}".lower()
+                # FILTRO 2: Buscador por palabra clave en tiempo real (ahora sumamos la dirección al buscador por texto)
+                dir_texto = cand.direccion if cand.direccion else ""
+                texto_completo = f"{cand.nombre} {cand.email} {str(post.notas)} {vac.titulo} {dir_texto}".lower()
                 if busqueda.lower() not in texto_completo:
                     continue
                     
                 with st.expander(f"👤 {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
                     st.write(f"📧 **Email:** {cand.email} | 📞 **Teléfono:** {cand.telefono}")
+                    # Muestra de forma elegante el barrio o la dirección cargada
+                    st.write(f"📍 **Ubicación / Barrio:** {cand.direccion if cand.direccion else 'No especificado'}")
                     
                     # Formulario individual de actualización rápida con NOTAS
                     with st.form(key=f"form_update_{post.id}"):
@@ -137,18 +140,26 @@ with tab2:
                 lector = pypdf.PdfReader(archivo)
                 texto_cv = "".join([pagina.extract_text() + "\n" for pagina in lector.pages])
                 
-                em = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', texto_cv)
+                em = re.search(r'[\w\.-]++@[\w\.-]+\.\w+', texto_cv)
                 tel = re.search(r'\+?\d[\d\s-]{7,14}\d', texto_cv)
                 nom_sug = archivo.name.replace(".pdf", "").replace("_", " ").replace("-", " ").title()
+                
+                # --- EXTRACCIÓN AUTOMÁTICA DE UBICACIÓN ---
+                # Busca palabras clave seguidas de texto en la misma línea (ej: "Barrio: Palermo")
+                match_dir = re.search(r'(dirección|direccion|domicilio|barrio|localidad|vive en|residencia)[:\s]+([^\n]{3,40})', texto_cv, re.IGNORECASE)
+                dir_sug = match_dir.group(2).strip() if match_dir else ""
                 
                 with st.form("form_confirmar_pdf"):
                     puesto_sel = st.selectbox("¿A qué puesto aplica?", list(opciones_vacantes.keys()))
                     nom = st.text_input("Nombre:", value=nom_sug)
                     email = st.text_input("Email:", value=em.group(0) if em else "")
                     telef = st.text_input("Teléfono:", value=tel.group(0).strip() if tel else "")
+                    # Añadimos el input pre-rellenado con lo que leyó del PDF (editable a mano antes de guardar)
+                    direccion = st.text_input("Dirección / Barrio / Localidad:", value=dir_sug)
                     
                     if st.form_submit_button("Confirmar Postulación") and nom and email:
-                        nuevo_c = Candidato(nombre=nom, email=email, telefono=telef)
+                        # Guardamos el campo direccion en el objeto Candidato
+                        nuevo_c = Candidato(nombre=nom, email=email, telefono=telef, direccion=direccion)
                         session.add(nuevo_c)
                         session.flush()
                         
