@@ -16,16 +16,8 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 st.set_page_config(page_title="Biofactor", layout="wide")
-col_logo, col_titulo = st.columns([1, 8])
-
-with col_logo:
-    st.image("logo.png", width=90)  # Le bajé un pelito el tamaño para que alinee mejor
-
-with col_titulo:
-    # Usamos markdown con un par de espacios arriba para que quede centrado con el logo
-    st.markdown("<br>", unsafe_allow_html=True) 
-    st.title("Vacante y Postulantes")
-
+st.image("logo.png", width=120)
+st.title("Vacante y Postulantes")
 st.markdown("---")
 
 # Navegación por pestañas
@@ -55,19 +47,52 @@ with tab1:
     
     col1, col2 = st.columns([1, 2])
     
+    # Inicializamos la memoria de qué puesto está seleccionado (empieza en "Todos")
+    if "puesto_seleccionado" not in st.session_state:
+        st.session_state.puesto_seleccionado = None
+
     with col1:
         st.subheader("🎯 Puestos Activos")
+        
+        # Botón para volver a ver todos los postulantes juntos
+        if st.button("✨ Ver Todos los Postulantes", use_container_width=True):
+            st.session_state.puesto_seleccionado = None
+            st.rerun()
+            
+        st.write("---")
+        
+        # Listamos los puestos como botones dinámicos
         for vac in session.query(Vacante).all():
-            st.info(f"**{vac.titulo}**\n\nSector: *{vac.departamento}*")
+            # Si está seleccionado, le ponemos un indicador visual
+            es_activo = st.session_state.puesto_seleccionado == vac.id
+            label_boton = f"📌 {vac.titulo} ({vac.departamento})" if es_activo else f"{vac.titulo} ({vac.departamento})"
+            
+            # El botón cambia el estado de la app al tocarlo
+            if st.button(label_boton, key=f"btn_vac_{vac.id}", use_container_width=True, type="primary" if es_activo else "secondary"):
+                st.session_state.puesto_seleccionado = vac.id
+                st.rerun()
         
     with col2:
-        st.subheader("👤 Postulantes")
+        # Cambiamos el título dinámicamente según el filtro activo
+        if st.session_state.puesto_seleccionado:
+            vac_actual = session.query(Vacante).filter(Vacante.id == st.session_state.puesto_seleccionado).first()
+            if vac_actual:
+                st.subheader(f"👤 Postulantes para: {vac_actual.titulo}")
+            else:
+                st.subheader("👤 Todos los Postulantes")
+        else:
+            st.subheader("👤 Todos los Postulantes")
+            
         for post in session.query(Postulacion).all():
+            # FILTRO 1: Si hay un puesto seleccionado en col1, salteamos los que no coincidan
+            if st.session_state.puesto_seleccionado and post.vacante_id != st.session_state.puesto_seleccionado:
+                continue
+                
             cand = session.query(Candidato).filter(Candidato.id == post.candidato_id).first()
             vac = session.query(Vacante).filter(Vacante.id == post.vacante_id).first()
             
             if cand and vac:
-                # Filtro del buscador en tiempo real
+                # FILTRO 2: Buscador por palabra clave en tiempo real
                 texto_completo = f"{cand.nombre} {cand.email} {str(post.notas)} {vac.titulo}".lower()
                 if busqueda.lower() not in texto_completo:
                     continue
@@ -129,7 +154,7 @@ with tab2:
                         
                         session.add(Postulacion(candidato_id=nuevo_c.id, vacante_id=opciones_vacantes[puesto_sel], estado_proceso="CV Recibido", notas="CV subido al sistema Biofactor."))
                         session.commit()
-                        st.success(f"¡{nom} registered con éxito!")
+                        st.success(f"¡{nom} registrado con éxito!")
                         st.rerun()
             except Exception as e:
                 st.error(f"Error al procesar: {e}")
