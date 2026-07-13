@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, ForeignKey, Text, LargeBinary
 from sqlalchemy.orm import declarative_base, relationship
 
 # 1. Configurar la conexión (Crea el archivo de la base de datos local)
@@ -17,8 +17,11 @@ class Candidato(Base):
     linkedin = Column(String(200))
     ruta_cv = Column(String(250))  # Aquí guardaremos la ubicación de su PDF
     
-    # --- NUEVA COLUMNA AGREGADA ---
+    # --- COLUMNA DE DIRECCIÓN ---
     direccion = Column(String(200))  # Aquí guardamos la dirección/barrio/localidad
+    
+    # --- NUEVA COLUMNA DE ARCHIVO BINARIO (Para la descarga directa) ---
+    archivo_cv = Column(LargeBinary) # Aquí se guardará el PDF real en bytes
     
     # Relación con las postulaciones
     postulaciones = relationship("Postulacion", back_populates="candidato")
@@ -45,7 +48,7 @@ class Postulacion(Base):
     estado_proceso = Column(String(50), default="Recibido")  # Recibido, Entrevista, Rechazado, etc.
     notas = Column(Text)
     
-    candidato = relationship("Candidato", back_populates="postulaciones")
+    candidato = relationship("Candidato", back_populates="candidato")
     vacante = relationship("Vacante", back_populates="postulaciones")
 
 # 5. Crear físicamente las tablas en el archivo .db
