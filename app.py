@@ -9,7 +9,6 @@ import re
 engine = create_engine('sqlite:///bolsa_empleo.db')
 Session = sessionmaker(bind=engine)
 session = Session()
-Base.metadata.create_all(engine)
 
 st.set_page_config(page_title="Biofactor", layout="wide")
 st.image("logo.png", width=120)
@@ -44,10 +43,10 @@ with tab1:
     col1, col2 = st.columns([1, 2])
     
     with col1:
-        st.subheader("🎯 Puestos Activos")
-        for vac in session.query(Vacante).all():
-            st.info(f"**{vac.titulo}**\n\nSector: *{vac.departamento}*")
-            
+       st.subheader("🎯 Puestos Activos")
+    for vac in session.query(Vacante).all():
+        st.info(f"**{vac.titulo}**\n\nSector: *{vac.departamento}*")
+        
     with col2:
         st.subheader("👤 Postulantes")
         for post in session.query(Postulacion).all():
