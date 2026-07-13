@@ -1,3 +1,4 @@
 streamlit
 pypdf
+sqlalchemy
 psycopg2-binary
