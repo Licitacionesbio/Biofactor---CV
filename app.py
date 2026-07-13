@@ -5,10 +5,15 @@ from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
 
-# Conexión limpia a la base de datos
-engine = create_engine('sqlite:///bolsa_empleo.db')
+# --- CONEXIÓN INTELIGENTE A NEON (NUBE) O LOCAL ---
+if "database" in st.secrets:
+    DATABASE_URL = st.secrets["database"]["url"]
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+else:
+    DATABASE_URL = 'sqlite:///bolsa_empleo.db'
 
-# Esta línea detectará la nueva columna y la sumará si no existe
+engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(engine)
 
 Session = sessionmaker(bind=engine)
@@ -19,7 +24,6 @@ st.image("logo.png", width=120)
 st.title("Vacante y Postulantes")
 st.markdown("---")
 
-# Navegación por pestañas
 tab1, tab2, tab3 = st.tabs(["📋 Panel de Gestión RRHH", "➕ Registrar con CV (PDF)", "🎯 Crear Nuevo Puesto"])
 
 # --- PESTAÑA 3: CREAR PUESTO ---
@@ -82,7 +86,8 @@ with tab1:
             
             if cand and vac:
                 dir_texto = cand.direccion if cand.direccion else ""
-                texto_completo = f"{cand.nombre} {cand.email} {str(post.notas)} {vac.titulo} {dir_texto}".lower()
+                notas_texto = post.notes if post.notes else ""
+                texto_completo = f"{cand.nombre} {cand.email} {str(notas_texto)} {vac.titulo} {dir_texto}".lower()
                 if busqueda.lower() not in texto_completo:
                     continue
                     
@@ -90,7 +95,6 @@ with tab1:
                     st.write(f"📧 **Email:** {cand.email} | 📞 **Teléfono:** {cand.telefono}")
                     st.write(f"📍 **Ubicación / Barrio:** {cand.direccion if cand.direccion else 'No especificado'}")
                     
-                    # --- BOTÓN DE DESCARGA DIRECTA DEL CV ---
                     if cand.archivo_cv:
                         st.download_button(
                             label="📥 Descargar CV (PDF)",
@@ -104,18 +108,17 @@ with tab1:
                     
                     st.write("---")
                     
-                    # Formulario individual de actualización rápida
                     with st.form(key=f"form_update_{post.id}"):
                         estados = ["CV Recibido", "Entrevista RRHH", "Prueba Técnica", "Entrevista Manager", "Oferta", "Rechazado", "Contratado"]
                         idx_actual = estados.index(post.estado_proceso) if post.estado_proceso in estados else 0
                         
                         nuevo_est = st.selectbox("Cambiar Etapa:", estados, index=idx_actual)
-                        notas_actuales = post.notas if post.notas else ""
+                        notas_actuales = post.notes if post.notes else ""
                         nuevas_notas = st.text_area("Notas / Comentarios del candidato:", value=notas_actuales, placeholder="Escribe aquí el feedback...")
                         
                         if st.form_submit_button("Guardar Cambios"):
                             post.estado_proceso = nuevo_est
-                            post.notas = nuevas_notas
+                            post.notes = nuevas_notas
                             session.commit()
                             st.success("¡Candidato actualizado!")
                             st.rerun()
@@ -136,7 +139,6 @@ with tab2:
         
         if archivo is not None:
             try:
-                # Extraemos los bytes puros del PDF subido
                 bytes_pdf = archivo.getvalue()
                 
                 lector = pypdf.PdfReader(archivo)
@@ -157,7 +159,6 @@ with tab2:
                     direccion = st.text_input("Dirección / Barrio / Localidad:", value=dir_sug)
                     
                     if st.form_submit_button("Confirmar Postulación") and nom and email:
-                        # Guardamos los bytes en archivo_cv y mantenemos la compatibilidad anterior
                         nuevo_c = Candidato(
                             nombre=nom, 
                             email=email, 
@@ -169,7 +170,7 @@ with tab2:
                         session.add(nuevo_c)
                         session.flush()
                         
-                        session.add(Postulacion(candidato_id=nuevo_c.id, vacante_id=opciones_vacantes[puesto_sel], estado_proceso="CV Recibido", notas="CV subido al sistema Biofactor."))
+                        session.add(Postulacion(candidato_id=nuevo_c.id, vacante_id=opciones_vacantes[puesto_sel], estado_proceso="CV Recibido", notes="CV subido al sistema Biofactor."))
                         session.commit()
                         st.success(f"¡{nom} registrado con éxito!")
                         st.rerun()
