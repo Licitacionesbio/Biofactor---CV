@@ -48,7 +48,7 @@ with tab1:
             st.info(f"**{vac.titulo}**\n\nSector: *{vac.departamento}*")
             
     with col2:
-        st.subheader("👤 Flujo de Postulantes")
+        st.subheader("👤 Postulantes")
         for post in session.query(Postulacion).all():
             cand = session.query(Candidato).filter(Candidato.id == post.candidato_id).first()
             vac = session.query(Vacante).filter(Vacante.id == post.vacante_id).first()
