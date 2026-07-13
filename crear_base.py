@@ -7,8 +7,11 @@ from sqlalchemy.orm import declarative_base, relationship
 # --- CONEXIÓN INTELIGENTE A NEON (NUBE) O LOCAL ---
 if "database" in st.secrets:
     DATABASE_URL = st.secrets["database"]["url"]
+    # Reemplazo estricto para forzar el uso de psycopg2 con Neon en SQLAlchemy
     if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 else:
     DATABASE_URL = 'sqlite:///bolsa_empleo.db'
 
