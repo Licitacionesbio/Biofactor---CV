@@ -16,8 +16,16 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 st.set_page_config(page_title="Biofactor", layout="wide")
-st.image("logo.png", width=120)
-st.title("Vacante y Postulantes")
+col_logo, col_titulo = st.columns([1, 8])
+
+with col_logo:
+    st.image("logo.png", width=90)  # Le bajé un pelito el tamaño para que alinee mejor
+
+with col_titulo:
+    # Usamos markdown con un par de espacios arriba para que quede centrado con el logo
+    st.markdown("<br>", unsafe_allow_html=True) 
+    st.title("Vacante y Postulantes")
+
 st.markdown("---")
 
 # Navegación por pestañas
