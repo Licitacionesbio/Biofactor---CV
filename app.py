@@ -25,6 +25,11 @@ session = Session()
 st.set_page_config(page_title="Biofactor", layout="wide")
 st.image("logo.png", width=120)
 st.title("Vacante y Postulantes")
+# --- BLOQUE DE DIAGNÓSTICO TEMPORAL ---
+if "database" in st.secrets:
+    st.warning(f"🔌 Intentando conectar a la nube (Neon)...")
+else:
+    st.error("🚨 ATENCIÓN: Streamlit Cloud NO está detectando tus Secrets. Usando base temporal SQLite.")
 st.markdown("---")
 
 tab1, tab2, tab3 = st.tabs(["📋 Panel de Gestión RRHH", "➕ Registrar con CV (PDF)", "🎯 Crear Nuevo Puesto"])
