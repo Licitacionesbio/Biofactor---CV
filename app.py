@@ -12,7 +12,7 @@ session = Session()
 
 st.set_page_config(page_title="Biofactor", layout="wide")
 st.image("logo.png", width=120)
-st.title(Vacante y Postulantes")
+st.title("Vacante y Postulantes")
 st.markdown("---")
 
 # Navegación por pestañas
