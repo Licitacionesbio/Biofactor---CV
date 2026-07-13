@@ -23,7 +23,7 @@ class Candidato(Base):
     # --- NUEVA COLUMNA DE ARCHIVO BINARIO (Para la descarga directa) ---
     archivo_cv = Column(LargeBinary) # Aquí se guardará el PDF real en bytes
     
-    # Relación con las postulaciones
+    # Relación con las postulaciones (Apunta a la propiedad 'candidato' en Postulacion)
     postulaciones = relationship("Postulacion", back_populates="candidato")
 
 # 3. Modelo de la Tabla: Vacantes (Puestos de trabajo en la empresa)
@@ -35,6 +35,7 @@ class Vacante(Base):
     departamento = Column(String(50))
     estado = Column(String(20), default="Abierta")  # Abierta o Cerrada
     
+    # Relación con las postulaciones (Apunta a la propiedad 'vacante' en Postulacion)
     postulaciones = relationship("Postulacion", back_populates="vacante")
 
 # 4. Modelo de la Tabla: Postulaciones (Une al Candidato con la Vacante)
@@ -48,7 +49,8 @@ class Postulacion(Base):
     estado_proceso = Column(String(50), default="Recibido")  # Recibido, Entrevista, Rechazado, etc.
     notas = Column(Text)
     
-    candidato = relationship("Candidato", back_populates="candidato")
+    # RELACIONES CORREGIDAS: Apuntan a la lista de 'postulaciones' de los padres
+    candidato = relationship("Candidato", back_populates="postulaciones")
     vacante = relationship("Vacante", back_populates="postulaciones")
 
 # 5. Crear físicamente las tablas en el archivo .db
