@@ -50,7 +50,6 @@ session = Session()
 col_logo, col_titulo = st.columns([1, 10])  # Proporción ideal para pantalla completa
 
 with col_logo:
-    st.write("")  # Pequeño espacio para centrado vertical
     st.image("logo.png", width=60) 
 
 with col_titulo:
