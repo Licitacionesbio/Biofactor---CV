@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
+import base64  # Requerido para mostrar el PDF dentro de la app
 
 st.set_page_config(page_title="Biofactor", layout="wide")
 
@@ -77,23 +78,30 @@ with tab3:
 
 # --- PESTAÑA 1: PANEL DE GESTIÓN RRHH ---
 with tab1:
-    st.subheader("🔍 Buscador de Talento")
-    busqueda = st.text_input("Filtrar candidatos por palabra clave:", value="")
-    st.markdown("---")
-    
+    # --- CÁLCULO DE CONTADORES EN TIEMPO REAL ---
+    try:
+        total_todos = session.query(Postulacion).count()
+        total_activos = session.query(Postulacion).filter(
+            Postulacion.estado_proceso.in_(["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial"])
+        ).count()
+        total_contratados = session.query(Postulacion).filter(Postulacion.estado_proceso == "Contratado").count()
+        total_rechazados = session.query(Postulacion).filter(Postulacion.estado_proceso == "Rechazado").count()
+    except Exception:
+        total_todos = total_activos = total_contratados = total_rechazados = 0
+
     col1, col2 = st.columns([1, 2])
     
     # Inicializamos el estado del filtro de la barra lateral si no existe
-    # Puede ser: "Todos", "Activos", "Contratados", "Rechazados"
     if "filtro_estado" not in st.session_state:
         st.session_state.filtro_estado = "Todos"
 
+    # --- BARRA LATERAL IZQUIERDA (ESTADOS CON CONTADORES) ---
     with col1:
         st.subheader("📊 Estados")
         
-        # Botón para limpiar filtros y ver todos
+        # Botón para limpiar filtros y ver todos con contador
         es_todos = st.session_state.filtro_estado == "Todos"
-        if st.button("✨ Ver Todos los Postulantes", 
+        if st.button(f"✨ Ver Todos ({total_todos})", 
                      use_container_width=True, 
                      type="primary" if es_todos else "secondary"):
             st.session_state.filtro_estado = "Todos"
@@ -101,40 +109,58 @@ with tab1:
             
         st.write("---")
         
-        # Botón para filtrar "Activos" (CV Recibido, Entrevista RRHH, Entrevista Director Comercial)
+        # Botón para filtrar "Activos" con contador
         es_activos = st.session_state.filtro_estado == "Activos"
-        if st.button("⚡ Activos (En Proceso)", 
+        if st.button(f"⚡ Activos ({total_activos})", 
                      use_container_width=True, 
                      type="primary" if es_activos else "secondary"):
             st.session_state.filtro_estado = "Activos"
             st.rerun()
             
-        # Botón para filtrar "Contratados"
+        # Botón para filtrar "Contratados" con contador
         es_contratados = st.session_state.filtro_estado == "Contratados"
-        if st.button("🎉 Contratados", 
+        if st.button(f"🎉 Contratados ({total_contratados})", 
                      use_container_width=True, 
                      type="primary" if es_contratados else "secondary"):
             st.session_state.filtro_estado = "Contratados"
             st.rerun()
             
-        # Botón para filtrar "Rechazados"
+        # Botón para filtrar "Rechazados" con contador
         es_rechazados = st.session_state.filtro_estado == "Rechazados"
-        if st.button("📁 Rechazados", 
+        if st.button(f"📁 Rechazados ({total_rechazados})", 
                      use_container_width=True, 
                      type="primary" if es_rechazados else "secondary"):
             st.session_state.filtro_estado = "Rechazados"
             st.rerun()
         
+    # --- SECCIÓN CENTRAL / DERECHA (FILTROS Y LISTADO) ---
     with col2:
-        # Cambiamos el título dinámico de la derecha según lo que el usuario seleccionó
-        if st.session_state.filtro_estado == "Todos":
-            st.subheader("👤 Todos los Postulantes")
-        elif st.session_state.filtro_estado == "Activos":
-            st.subheader("👤 Postulantes Activos (En Proceso)")
-        elif st.session_state.filtro_estado == "Contratados":
-            st.subheader("👤 Postulantes Contratados")
-        elif st.session_state.filtro_estado == "Rechazados":
-            st.subheader("👤 Postulantes Archivados / Rechazados")
+        st.subheader("🔍 Buscador de Talento")
+        
+        # Obtener puestos reales de la base para el filtro combinado
+        try:
+            vacantes_db = session.query(Vacante).all()
+        except Exception:
+            vacantes_db = []
+        opciones_puestos = ["Todos los Puestos"] + [v.titulo for v in vacantes_db]
+        
+        # Grid de filtros lado a lado
+        col_filtro_puesto, col_filtro_texto = st.columns([1, 1])
+        with col_filtro_puesto:
+            puesto_seleccionado = st.selectbox("Filtrar por Puesto Laboral:", opciones_puestos)
+        with col_filtro_texto:
+            busqueda = st.text_input("Filtrar por palabra clave:", value="", placeholder="Nombre, email, notas...")
+            
+        st.markdown("---")
+        
+        # Cambiamos el título dinámico según el estado seleccionado
+        titulos_estado = {
+            "Todos": "👤 Todos los Postulantes",
+            "Activos": "👤 Postulantes Activos (En Proceso)",
+            "Contratados": "👤 Postulantes Contratados",
+            "Rechazados": "👤 Postulantes Archivados / Rechazados"
+        }
+        st.write(f"### {titulos_estado.get(st.session_state.filtro_estado, 'Candidatos')}")
             
         try:
             postulaciones_db = session.query(Postulacion).all()
@@ -143,9 +169,8 @@ with tab1:
             postulaciones_db = []
 
         for post in postulaciones_db:
-            # --- FILTRADO POR ESTADO SELECCIONADO ---
+            # --- FILTRADO 1: ESTADO (BOTONES DE LA IZQUIERDA) ---
             if st.session_state.filtro_estado == "Activos":
-                # Entran los que están en proceso de entrevistas o recién recibidos
                 if post.estado_proceso not in ["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial"]:
                     continue
             elif st.session_state.filtro_estado == "Contratados":
@@ -154,12 +179,16 @@ with tab1:
             elif st.session_state.filtro_estado == "Rechazados":
                 if post.estado_proceso != "Rechazado":
                     continue
-            # ----------------------------------------
                 
             cand = session.query(Candidato).filter(Candidato.id == post.candidato_id).first()
             vac = session.query(Vacante).filter(Vacante.id == post.vacante_id).first()
             
             if cand and vac:
+                # --- FILTRADO 2: PUESTO (SELECTBOX) ---
+                if puesto_seleccionado != "Todos los Puestos" and vac.titulo != puesto_seleccionado:
+                    continue
+                
+                # --- FILTRADO 3: PALABRA CLAVE (TEXT INPUT) ---
                 dir_texto = cand.direccion if cand.direccion else ""
                 notes_texto = post.notes if post.notes else ""
                 texto_completo = f"{cand.nombre} {cand.email} {str(notes_texto)} {vac.titulo} {dir_texto}".lower()
@@ -170,14 +199,28 @@ with tab1:
                     st.write(f"📧 **Email:** {cand.email} | 📞 **Teléfono:** {cand.telefono}")
                     st.write(f"📍 **Ubicación / Barrio:** {cand.direccion if cand.direccion else 'No especificado'}")
                     
+                    # --- COMPONENTE DE CV (DESCARGA Y PREVISUALIZADOR) ---
                     if cand.archivo_cv:
-                        st.download_button(
-                            label="📥 Descargar CV (PDF)",
-                            data=cand.archivo_cv,
-                            file_name=f"CV_{cand.nombre.replace(' ', '_')}.pdf",
-                            mime="application/pdf",
-                            key=f"dl_{cand.id}"
-                        )
+                        col_btn1, col_btn2 = st.columns([1, 1])
+                        with col_btn1:
+                            st.download_button(
+                                label="📥 Descargar CV (PDF)",
+                                data=cand.archivo_cv,
+                                file_name=f"CV_{cand.nombre.replace(' ', '_')}.pdf",
+                                mime="application/pdf",
+                                key=f"dl_{cand.id}_{post.id}"  # Llave única agregando post.id
+                            )
+                        with col_btn2:
+                            ver_pdf = st.checkbox("👀 Previsualizar CV en pantalla", key=f"ver_{cand.id}_{post.id}")
+                        
+                        # Si activan la previsualización, se renderiza un iframe interactivo
+                        if ver_pdf:
+                            try:
+                                base64_pdf = base64.b64encode(cand.archivo_cv).decode('utf-8')
+                                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+                                st.markdown(pdf_display, unsafe_allow_html=True)
+                            except Exception as e:
+                                st.error(f"No se pudo previsualizar el PDF: {e}")
                     else:
                         st.info("No hay un archivo PDF guardado para este candidato.")
                     
@@ -198,7 +241,7 @@ with tab1:
                             st.success("¡Candidato actualizado!")
                             st.rerun()
 
-# --- PESTAÑA 2: LECTOR DE PDF ---
+# --- PESTAÑA 2: LECTOR DE PDF (CON PREVENCION DE DUPLICADOS) ---
 with tab2:
     st.subheader("Cargar Currículum en PDF")
     try:
@@ -234,21 +277,51 @@ with tab2:
                     direccion = st.text_input("Dirección / Barrio / Localidad:", value=dir_sug)
                     
                     if st.form_submit_button("Confirmar Postulación") and nom and email:
-                        nuevo_c = Candidato(
-                            nombre=nom, 
-                            email=email, 
-                            telefono=telef, 
-                            direccion=direccion, 
-                            archivo_cv=bytes_pdf,
-                            ruta_cv=archivo.name
-                        )
-                        session.add(nuevo_c)
-                        session.flush()
+                        # --- CONTROL INTELIGENTE DE DUPLICADOS ---
+                        candidato_existente = session.query(Candidato).filter(Candidato.email == email).first()
                         
-                        session.add(Postulacion(candidato_id=nuevo_c.id, vacante_id=opciones_vacantes[puesto_sel], estado_proceso="CV Recibido", notes="CV subido al sistema Biofactor."))
-                        session.commit()
-                        st.success(f"¡{nom} registrado con éxito!")
-                        st.rerun()
+                        if candidato_existente:
+                            # Si ya existe, actualizamos sus datos de perfil con la información más nueva
+                            candidato_existente.nombre = nom
+                            candidato_existente.telefono = telef
+                            candidato_existente.direccion = direccion
+                            candidato_existente.archivo_cv = bytes_pdf
+                            candidato_existente.ruta_cv = archivo.name
+                            candidato_id = candidato_existente.id
+                            st.info("ℹ️ Se detectó que el correo ya existe. Se actualizaron los datos personales y el CV del candidato.")
+                        else:
+                            # Si es nuevo, lo creamos
+                            nuevo_c = Candidato(
+                                nombre=nom, 
+                                email=email, 
+                                telefono=telef, 
+                                direccion=direccion, 
+                                archivo_cv=bytes_pdf,
+                                ruta_cv=archivo.name
+                            )
+                            session.add(nuevo_c)
+                            session.flush()  # Generamos el ID temporalmente para la relación
+                            candidato_id = nuevo_c.id
+                        
+                        # Verificamos si ya está postulado a este puesto en particular
+                        postulacion_existente = session.query(Postulacion).filter(
+                            Postulacion.candidato_id == candidato_id,
+                            Postulacion.vacante_id == opciones_vacantes[puesto_sel]
+                        ).first()
+                        
+                        if postulacion_existente:
+                            st.warning(f"⚠️ El candidato ya se postuló previamente para '{puesto_sel}'. Estado actual: '{postulacion_existente.estado_proceso}'. No se duplicó el registro.")
+                        else:
+                            # Agregamos la nueva postulación
+                            session.add(Postulacion(
+                                candidato_id=candidato_id, 
+                                vacante_id=opciones_vacantes[puesto_sel], 
+                                estado_proceso="CV Recibido", 
+                                notes="CV subido al sistema Biofactor."
+                            ))
+                            session.commit()
+                            st.success(f"¡{nom} registrado con éxito en '{puesto_sel}'!")
+                            st.rerun()
             except Exception as e:
                 st.error(f"Error al procesar: {e}")
 
