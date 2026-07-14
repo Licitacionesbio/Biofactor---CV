@@ -199,7 +199,7 @@ with tab1:
                     st.write(f"📧 **Email:** {cand.email} | 📞 **Teléfono:** {cand.telefono}")
                     st.write(f"📍 **Ubicación / Barrio:** {cand.direccion if cand.direccion else 'No especificado'}")
                     
-                    # --- COMPONENTE DE CV (DESCARGA Y PREVISUALIZADOR SEGURO PARA CHROME) ---
+                    # --- COMPONENTE DE CV (DESCARGA Y PREVISUALIZADOR MEJORADO) ---
                     if cand.archivo_cv:
                         col_btn1, col_btn2 = st.columns([1, 1])
                         with col_btn1:
@@ -213,13 +213,31 @@ with tab1:
                         with col_btn2:
                             ver_pdf = st.checkbox("👀 Previsualizar CV en pantalla", key=f"ver_{cand.id}_{post.id}")
                         
-                        # Si activan la previsualización, se renderiza con <embed> que Chrome no bloquea
+                        # Si se activa la previsualización, se renderiza de forma robusta y sin bloqueos
                         if ver_pdf:
                             try:
                                 base64_pdf = base64.b64encode(cand.archivo_cv).decode('utf-8')
+                                
+                                # Botón seguro de escape: Abre en pestaña nueva sin ninguna restricción
+                                pdf_link = (
+                                    f'<a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="text-decoration: none;">'
+                                    f'<button style="background-color: #2e7d32; color: white; border: none; padding: 10px 20px; '
+                                    f'border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px;">'
+                                    f'🔓 Abrir visualizador en pestaña completa (Evita restricciones de Chrome)'
+                                    f'</button></a>'
+                                )
+                                st.markdown(pdf_link, unsafe_allow_html=True)
+                                
+                                # Visor nativo usando la etiqueta <object> con soporte de fallback
                                 pdf_display = (
-                                    f'<embed src="data:application/pdf;base64,{base64_pdf}" '
-                                    f'width="100%" height="600" type="application/pdf" />'
+                                    f'<object data="data:application/pdf;base64,{base64_pdf}" '
+                                    f'type="application/pdf" width="100%" height="600">'
+                                    f'<div style="text-align: center; padding: 20px; border: 1px dashed #ccc; border-radius: 8px;">'
+                                    f'⚠️ Tu configuración de Chrome bloqueó la previsualización directa.<br><br>'
+                                    f'<a href="data:application/pdf;base64,{base64_pdf}" download="CV_{cand.nombre.replace(" ", "_")}.pdf" '
+                                    f'style="color: #FF4B4B; font-weight: bold;">[Haz clic aquí para descargar y ver directamente]</a>'
+                                    f'</div>'
+                                    f'</object>'
                                 )
                                 st.markdown(pdf_display, unsafe_allow_html=True)
                             except Exception as e:
@@ -234,8 +252,8 @@ with tab1:
                         idx_actual = estados.index(post.estado_proceso) if post.estado_proceso in estados else 0
                         
                         nuevo_est = st.selectbox("Cambiar Etapa:", estados, index=idx_actual)
-                        notas_actuales = post.notes if post.notes else ""
-                        nuevas_notas = st.text_area("Notas / Comentarios del candidato:", value=notas_actuales, placeholder="Escribe aquí el feedback...")
+                        notes_actuales = post.notes if post.notes else ""
+                        nuevas_notas = st.text_area("Notas / Comentarios del candidato:", value=notes_actuales, placeholder="Escribe aquí el feedback...")
                         
                         if st.form_submit_button("Guardar Cambios"):
                             post.estado_proceso = nuevo_est
