@@ -46,8 +46,15 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
 
-st.image("logo.png", width=60) st.title("BIOFACTOR S.A. - Vacante y Postulantes")
+# --- LOGO Y TÍTULO EN LA MISMA FILA ---
+col_logo, col_titulo = st.columns([1, 10])  # Proporción ideal para pantalla completa
 
+with col_logo:
+    st.write("")  # Pequeño espacio para centrado vertical
+    st.image("logo.png", width=60) 
+
+with col_titulo:
+    st.title("BIOFACTOR S.A. - Vacante y Postulantes") 
 
 st.markdown("---")
 
@@ -125,8 +132,8 @@ with tab1:
             
             if cand and vac:
                 dir_texto = cand.direccion if cand.direccion else ""
-                notas_texto = post.notes if post.notes else ""
-                texto_completo = f"{cand.nombre} {cand.email} {str(notas_texto)} {vac.titulo} {dir_texto}".lower()
+                notes_texto = post.notes if post.notes else ""
+                texto_completo = f"{cand.nombre} {cand.email} {str(notes_texto)} {vac.titulo} {dir_texto}".lower()
                 if busqueda.lower() not in texto_completo:
                     continue
                     
