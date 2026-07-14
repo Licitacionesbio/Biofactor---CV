@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
-import base64  # Requerido para mostrar el PDF dentro de la app
+import base64  # Requerido para mostrar el PDF dentro de la app de forma segura
 
 st.set_page_config(page_title="Biofactor", layout="wide")
 
@@ -199,7 +199,7 @@ with tab1:
                     st.write(f"📧 **Email:** {cand.email} | 📞 **Teléfono:** {cand.telefono}")
                     st.write(f"📍 **Ubicación / Barrio:** {cand.direccion if cand.direccion else 'No especificado'}")
                     
-                    # --- COMPONENTE DE CV (DESCARGA Y PREVISUALIZADOR) ---
+                    # --- COMPONENTE DE CV (DESCARGA Y PREVISUALIZADOR SEGURO PARA CHROME) ---
                     if cand.archivo_cv:
                         col_btn1, col_btn2 = st.columns([1, 1])
                         with col_btn1:
@@ -208,16 +208,19 @@ with tab1:
                                 data=cand.archivo_cv,
                                 file_name=f"CV_{cand.nombre.replace(' ', '_')}.pdf",
                                 mime="application/pdf",
-                                key=f"dl_{cand.id}_{post.id}"  # Llave única agregando post.id
+                                key=f"dl_{cand.id}_{post.id}"
                             )
                         with col_btn2:
                             ver_pdf = st.checkbox("👀 Previsualizar CV en pantalla", key=f"ver_{cand.id}_{post.id}")
                         
-                        # Si activan la previsualización, se renderiza un iframe interactivo
+                        # Si activan la previsualización, se renderiza con <embed> que Chrome no bloquea
                         if ver_pdf:
                             try:
                                 base64_pdf = base64.b64encode(cand.archivo_cv).decode('utf-8')
-                                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf"></iframe>'
+                                pdf_display = (
+                                    f'<embed src="data:application/pdf;base64,{base64_pdf}" '
+                                    f'width="100%" height="600" type="application/pdf" />'
+                                )
                                 st.markdown(pdf_display, unsafe_allow_html=True)
                             except Exception as e:
                                 st.error(f"No se pudo previsualizar el PDF: {e}")
