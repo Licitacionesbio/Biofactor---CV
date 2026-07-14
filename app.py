@@ -46,7 +46,7 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
 
-st.image("logo.png", width=120)
+st.image("logo.png", width=60)
 st.title("Vacante y Postulantes - BIOFACTOR S.A.")
 
 st.markdown("---")
