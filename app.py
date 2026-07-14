@@ -148,7 +148,7 @@ with tab1:
                     st.write("---")
                     
                     with st.form(key=f"form_update_{post.id}"):
-                        estados = ["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial", "Oferta", "Rechazado", "Contratado"]
+                        estados = ["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial", "Rechazado", "Contratado"]
                         idx_actual = estados.index(post.estado_proceso) if post.estado_proceso in estados else 0
                         
                         nuevo_est = st.selectbox("Cambiar Etapa:", estados, index=idx_actual)
