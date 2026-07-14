@@ -47,7 +47,7 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 st.image("logo.png", width=120)
-st.title("Vacante y Postulantes")
+st.title("Vacante y Postulantes - BIOFACTOR S.A.")
 
 st.markdown("---")
 
