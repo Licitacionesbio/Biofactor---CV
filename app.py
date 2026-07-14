@@ -85,9 +85,12 @@ with tab1:
             Postulacion.estado_proceso.in_(["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial"])
         ).count()
         total_contratados = session.query(Postulacion).filter(Postulacion.estado_proceso == "Contratado").count()
-        total_rechazados = session.query(Postulacion).filter(Postulacion.estado_proceso == "Rechazado").count()
+        # Modificado: Ahora busca y cuenta bajo la nueva etiqueta suavizada
+        total_reservados = session.query(Postulacion).filter(
+            Postulacion.estado_proceso.in_(["Perfil en Reserva", "Rechazado"])
+        ).count()
     except Exception:
-        total_todos = total_activos = total_contratados = total_rechazados = 0
+        total_todos = total_activos = total_contratados = total_reservados = 0
 
     col1, col2 = st.columns([1, 2])
     
@@ -125,12 +128,12 @@ with tab1:
             st.session_state.filtro_estado = "Contratados"
             st.rerun()
             
-        # Botón para filtrar "Rechazados" con contador
-        es_rechazados = st.session_state.filtro_estado == "Rechazados"
-        if st.button(f"📁 Rechazados ({total_rechazados})", 
+        # Modificado: Botón suavizado para filtrar perfiles guardados
+        es_reservados = st.session_state.filtro_estado == "Reserva"
+        if st.button(f"📁 Perfil en Reserva ({total_reservados})", 
                      use_container_width=True, 
-                     type="primary" if es_rechazados else "secondary"):
-            st.session_state.filtro_estado = "Rechazados"
+                     type="primary" if es_reservados else "secondary"):
+            st.session_state.filtro_estado = "Reserva"
             st.rerun()
         
     # --- SECCIÓN CENTRAL / DERECHA (FILTROS Y LISTADO) ---
@@ -158,7 +161,7 @@ with tab1:
             "Todos": "👤 Todos los Postulantes",
             "Activos": "👤 Postulantes Activos (En Proceso)",
             "Contratados": "👤 Postulantes Contratados",
-            "Rechazados": "👤 Postulantes Archivados / Rechazados"
+            "Reserva": "👤 Perfiles en Reserva / Archivo"
         }
         st.write(f"### {titulos_estado.get(st.session_state.filtro_estado, 'Candidatos')}")
             
@@ -176,8 +179,9 @@ with tab1:
             elif st.session_state.filtro_estado == "Contratados":
                 if post.estado_proceso != "Contratado":
                     continue
-            elif st.session_state.filtro_estado == "Rechazados":
-                if post.estado_proceso != "Rechazado":
+            elif st.session_state.filtro_estado == "Reserva":
+                # Muestra tanto los nuevos como si hubiera quedado alguno con la etiqueta vieja
+                if post.estado_proceso not in ["Perfil en Reserva", "Rechazado"]:
                     continue
                 
             cand = session.query(Candidato).filter(Candidato.id == post.candidato_id).first()
@@ -249,8 +253,15 @@ with tab1:
                     
                     # Formulario para editar la postulación con el nuevo botón integrado de eliminación
                     with st.form(key=f"form_update_{post.id}"):
-                        estados = ["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial", "Rechazado", "Contratado"]
-                        idx_actual = estados.index(post.estado_proceso) if post.estado_proceso in estados else 0
+                        # Modificado: Se reemplazó "Rechazado" por "Perfil en Reserva"
+                        estados = ["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial", "Perfil en Reserva", "Contratado"]
+                        
+                        # Manejo de compatibilidad en caso de que existan registros viejos guardados como "Rechazado"
+                        estado_actual = post.estado_proceso
+                        if estado_actual == "Rechazado":
+                            estado_actual = "Perfil en Reserva"
+                            
+                        idx_actual = estados.index(estado_actual) if estado_actual in estados else 0
                         
                         nuevo_est = st.selectbox("Cambiar Etapa:", estados, index=idx_actual)
                         notes_actuales = post.notes if post.notes else ""
