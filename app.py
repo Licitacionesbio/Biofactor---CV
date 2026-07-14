@@ -13,10 +13,16 @@ if "database" in st.secrets:
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
     elif DATABASE_URL.startswith("postgresql://"):
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+    
+    # Neon requiere explícitamente pasar el parámetro de SSL en los argumentos de conexión
+    engine = create_engine(
+        DATABASE_URL, 
+        connect_args={"sslmode": "require"}
+    )
 else:
     DATABASE_URL = 'sqlite:///bolsa_empleo.db'
+    engine = create_engine(DATABASE_URL)
 
-engine = create_engine(DATABASE_URL)
 Base.metadata.create_all(engine)
 
 Session = sessionmaker(bind=engine)
@@ -25,11 +31,13 @@ session = Session()
 st.set_page_config(page_title="Biofactor", layout="wide")
 st.image("logo.png", width=120)
 st.title("Vacante y Postulantes")
+
 # --- BLOQUE DE DIAGNÓSTICO TEMPORAL ---
 if "database" in st.secrets:
-    st.warning(f"🔌 Intentando conectar a la nube (Neon)...")
+    st.warning("🔌 Intentando conectar a la nube (Neon)...")
 else:
     st.error("🚨 ATENCIÓN: Streamlit Cloud NO está detectando tus Secrets. Usando base temporal SQLite.")
+
 st.markdown("---")
 
 tab1, tab2, tab3 = st.tabs(["📋 Panel de Gestión RRHH", "➕ Registrar con CV (PDF)", "🎯 Crear Nuevo Puesto"])
