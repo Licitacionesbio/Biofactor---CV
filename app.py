@@ -82,7 +82,7 @@ with tab1:
     try:
         total_todos = session.query(Postulacion).count()
         total_activos = session.query(Postulacion).filter(
-            Postulacion.estado_proceso.in_(["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial"])
+            Postulacion.estado_proceso.in_(["CV Recibido", "Entrevista Director Comercial", "Entrevista RRHH", "Entrevista Presencial"])
         ).count()
         total_contratados = session.query(Postulacion).filter(Postulacion.estado_proceso == "Contratado").count()
         # Modificado: Ahora busca y cuenta bajo la nueva etiqueta suavizada
