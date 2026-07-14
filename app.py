@@ -84,38 +84,58 @@ with tab1:
     
     col1, col2 = st.columns([1, 2])
     
-    if "puesto_seleccionado" not in st.session_state:
-        st.session_state.puesto_seleccionado = None
+    # Inicializamos el estado del filtro de la barra lateral si no existe
+    # Puede ser: "Todos", "Activos", "Contratados", "Rechazados"
+    if "filtro_estado" not in st.session_state:
+        st.session_state.filtro_estado = "Todos"
 
     with col1:
-        st.subheader("🎯 Puestos Activos")
-        if st.button("✨ Ver Todos los Postulantes", use_container_width=True):
-            st.session_state.puesto_seleccionado = None
+        st.subheader("📊 Estados")
+        
+        # Botón para limpiar filtros y ver todos
+        es_todos = st.session_state.filtro_estado == "Todos"
+        if st.button("✨ Ver Todos los Postulantes", 
+                     use_container_width=True, 
+                     type="primary" if es_todos else "secondary"):
+            st.session_state.filtro_estado = "Todos"
             st.rerun()
             
         st.write("---")
-        try:
-            vacantes_db = session.query(Vacante).all()
-        except Exception as e:
-            st.error(f"Error leyendo vacantes de la base de datos: {e}")
-            vacantes_db = []
-
-        for vac in vacantes_db:
-            es_activo = st.session_state.puesto_seleccionado == vac.id
-            label_boton = f"📌 {vac.titulo} ({vac.departamento})" if es_activo else f"{vac.titulo} ({vac.departamento})"
-            if st.button(label_boton, key=f"btn_vac_{vac.id}", use_container_width=True, type="primary" if es_activo else "secondary"):
-                st.session_state.puesto_seleccionado = vac.id
-                st.rerun()
+        
+        # Botón para filtrar "Activos" (CV Recibido, Entrevista RRHH, Entrevista Director Comercial)
+        es_activos = st.session_state.filtro_estado == "Activos"
+        if st.button("⚡ Activos (En Proceso)", 
+                     use_container_width=True, 
+                     type="primary" if es_activos else "secondary"):
+            st.session_state.filtro_estado = "Activos"
+            st.rerun()
+            
+        # Botón para filtrar "Contratados"
+        es_contratados = st.session_state.filtro_estado == "Contratados"
+        if st.button("🎉 Contratados", 
+                     use_container_width=True, 
+                     type="primary" if es_contratados else "secondary"):
+            st.session_state.filtro_estado = "Contratados"
+            st.rerun()
+            
+        # Botón para filtrar "Rechazados"
+        es_rechazados = st.session_state.filtro_estado == "Rechazados"
+        if st.button("📁 Rechazados", 
+                     use_container_width=True, 
+                     type="primary" if es_rechazados else "secondary"):
+            st.session_state.filtro_estado = "Rechazados"
+            st.rerun()
         
     with col2:
-        if st.session_state.puesto_seleccionado:
-            vac_actual = session.query(Vacante).filter(Vacante.id == st.session_state.puesto_seleccionado).first()
-            if vac_actual:
-                st.subheader(f"👤 Postulantes para: {vac_actual.titulo}")
-            else:
-                st.subheader("👤 Todos los Postulantes")
-        else:
+        # Cambiamos el título dinámico de la derecha según lo que el usuario seleccionó
+        if st.session_state.filtro_estado == "Todos":
             st.subheader("👤 Todos los Postulantes")
+        elif st.session_state.filtro_estado == "Activos":
+            st.subheader("👤 Postulantes Activos (En Proceso)")
+        elif st.session_state.filtro_estado == "Contratados":
+            st.subheader("👤 Postulantes Contratados")
+        elif st.session_state.filtro_estado == "Rechazados":
+            st.subheader("👤 Postulantes Archivados / Rechazados")
             
         try:
             postulaciones_db = session.query(Postulacion).all()
@@ -124,8 +144,18 @@ with tab1:
             postulaciones_db = []
 
         for post in postulaciones_db:
-            if st.session_state.puesto_seleccionado and post.vacante_id != st.session_state.puesto_seleccionado:
-                continue
+            # --- FILTRADO POR ESTADO SELECCIONADO ---
+            if st.session_state.filtro_estado == "Activos":
+                # Entran los que están en proceso de entrevistas o recién recibidos
+                if post.estado_proceso not in ["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial"]:
+                    continue
+            elif st.session_state.filtro_estado == "Contratados":
+                if post.estado_proceso != "Contratado":
+                    continue
+            elif st.session_state.filtro_estado == "Rechazados":
+                if post.estado_proceso != "Rechazado":
+                    continue
+            # ----------------------------------------
                 
             cand = session.query(Candidato).filter(Candidato.id == post.candidato_id).first()
             vac = session.query(Vacante).filter(Vacante.id == post.vacante_id).first()
