@@ -47,7 +47,7 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 # --- LOGO Y TÍTULO EN LA MISMA FILA ---
-col_logo, col_titulo = st.columns([1, 3])  # Proporción ideal para pantalla completa
+col_logo, col_titulo = st.columns([1, 20])  # Proporción ideal para pantalla completa
 
 with col_logo:
     st.image("logo.png", width=60) 
