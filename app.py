@@ -247,6 +247,7 @@ with tab1:
                     
                     st.write("---")
                     
+                    # Formulario para editar la postulación con el nuevo botón integrado de eliminación
                     with st.form(key=f"form_update_{post.id}"):
                         estados = ["CV Recibido", "Entrevista RRHH", "Entrevista Director Comercial", "Rechazado", "Contratado"]
                         idx_actual = estados.index(post.estado_proceso) if post.estado_proceso in estados else 0
@@ -255,12 +256,27 @@ with tab1:
                         notes_actuales = post.notes if post.notes else ""
                         nuevas_notas = st.text_area("Notas / Comentarios del candidato:", value=notes_actuales, placeholder="Escribe aquí el feedback...")
                         
-                        if st.form_submit_button("Guardar Cambios"):
-                            post.estado_proceso = nuevo_est
-                            post.notes = nuevas_notas
-                            session.commit()
-                            st.success("¡Candidato actualizado!")
-                            st.rerun()
+                        # Dos columnas para acomodar los botones al final del formulario
+                        col_save, col_del = st.columns([1, 1])
+                        
+                        with col_save:
+                            if st.form_submit_button("Guardar Cambios", use_container_width=True):
+                                post.estado_proceso = nuevo_est
+                                post.notes = nuevas_notas
+                                session.commit()
+                                st.success("¡Candidato actualizado!")
+                                st.rerun()
+                                
+                        with col_del:
+                            if st.form_submit_button("🗑️ Eliminar Postulación", use_container_width=True):
+                                try:
+                                    session.delete(post)
+                                    session.commit()
+                                    st.warning("Postulación eliminada por completo de la base de datos.")
+                                    st.rerun()
+                                except Exception as e:
+                                    session.rollback()
+                                    st.error(f"No se pudo eliminar: {e}")
 
 # --- PESTAÑA 2: LECTOR DE PDF (CON PREVENCION DE DUPLICADOS) ---
 with tab2:
