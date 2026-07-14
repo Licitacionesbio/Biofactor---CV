@@ -1,11 +1,15 @@
 import streamlit as st
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
 
+st.set_page_config(page_title="Biofactor", layout="wide")
+
 # --- CONEXIÓN INTELIGENTE A NEON (NUBE) O LOCAL ---
+connection_successful = False
+
 if "database" in st.secrets:
     DATABASE_URL = st.secrets["database"]["url"]
     # Reemplazo estricto para asegurar compatibilidad con SQLAlchemy + Neon (psycopg2)
@@ -14,12 +18,26 @@ if "database" in st.secrets:
     elif DATABASE_URL.startswith("postgresql://"):
         DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
     
-    # Neon requiere explícitamente pasar el parámetro de SSL en los argumentos de conexión
-    engine = create_engine(
-        DATABASE_URL, 
-        connect_args={"sslmode": "require"}
-    )
+    try:
+        # Intentamos conectar a Neon usando sslmode obligatorio
+        engine = create_engine(
+            DATABASE_URL, 
+            connect_args={"sslmode": "require"}
+        )
+        # Probamos ejecutar una consulta ultra simple para verificar si el canal de datos responde
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        
+        st.success("🔌 ¡Conexión exitosa a la base de datos de Neon en la nube!")
+        connection_successful = True
+    except Exception as e:
+        # Mostramos en pantalla el error técnico específico de PostgreSQL
+        st.error(f"🚨 Error al intentar conectar a Neon: {e}")
+        st.warning("Se cayó o falló la conexión con Neon. Usando base temporal local SQLite para que la app no se apague.")
+        DATABASE_URL = 'sqlite:///bolsa_empleo.db'
+        engine = create_engine(DATABASE_URL)
 else:
+    st.warning("⚠️ No se detectaron Secrets de base de datos en Streamlit. Usando base local SQLite.")
     DATABASE_URL = 'sqlite:///bolsa_empleo.db'
     engine = create_engine(DATABASE_URL)
 
@@ -28,15 +46,8 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
 
-st.set_page_config(page_title="Biofactor", layout="wide")
 st.image("logo.png", width=120)
 st.title("Vacante y Postulantes")
-
-# --- BLOQUE DE DIAGNÓSTICO TEMPORAL ---
-if "database" in st.secrets:
-    st.warning("🔌 Intentando conectar a la nube (Neon)...")
-else:
-    st.error("🚨 ATENCIÓN: Streamlit Cloud NO está detectando tus Secrets. Usando base temporal SQLite.")
 
 st.markdown("---")
 
@@ -56,7 +67,7 @@ with tab3:
                 st.rerun()
             except Exception as e:
                 session.rollback()
-                st.error(f"Error: {e}")
+                st.error(f"Error al guardar puesto: {e}")
 
 # --- PESTAÑA 1: PANEL DE GESTIÓN RRHH ---
 with tab1:
@@ -76,7 +87,13 @@ with tab1:
             st.rerun()
             
         st.write("---")
-        for vac in session.query(Vacante).all():
+        try:
+            vacantes_db = session.query(Vacante).all()
+        except Exception as e:
+            st.error(f"Error leyendo vacantes de la base de datos: {e}")
+            vacantes_db = []
+
+        for vac in vacantes_db:
             es_activo = st.session_state.puesto_seleccionado == vac.id
             label_boton = f"📌 {vac.titulo} ({vac.departamento})" if es_activo else f"{vac.titulo} ({vac.departamento})"
             if st.button(label_boton, key=f"btn_vac_{vac.id}", use_container_width=True, type="primary" if es_activo else "secondary"):
@@ -93,7 +110,13 @@ with tab1:
         else:
             st.subheader("👤 Todos los Postulantes")
             
-        for post in session.query(Postulacion).all():
+        try:
+            postulaciones_db = session.query(Postulacion).all()
+        except Exception as e:
+            st.error(f"Error leyendo postulaciones: {e}")
+            postulaciones_db = []
+
+        for post in postulaciones_db:
             if st.session_state.puesto_seleccionado and post.vacante_id != st.session_state.puesto_seleccionado:
                 continue
                 
