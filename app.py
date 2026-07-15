@@ -15,7 +15,7 @@ if "database" in st.secrets:
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
     elif DATABASE_URL.startswith("postgresql://"):
-        DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg2://", "postgresql+psycopg2://", 1)
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
     
     try:
         engine = create_engine(DATABASE_URL, connect_args={"sslmode": "require"})
@@ -220,11 +220,12 @@ with tab1:
                 texto_completo = f"{cand.nombre} {cand.email} {str(notes_texto)} {vac.titulo} {dir_texto}".lower()
                 if busqueda.lower() not in texto_completo:
                     continue
-                    
-                with st.expander(f"👤 {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
+                
+                # --- [CAMBIO 1] TUERCA ⚙️ EN CADA EXPANDER DE CANDIDATO ---
+                with st.expander(f"⚙️ {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
                     st.write(f"📧 **Email:** {cand.email}")
                     
-                    # --- MOSTRAR TELÉFONO CON ACCESO DIRECTO A WHATSAPP (CON LOGO OFICIAL SVG) ---
+                    # --- MOSTRAR TELÉFONO CON ACCESO DIRECTO A WHATSAPP ---
                     link_wa = obtener_link_whatsapp(cand.telefono)
                     col_tel, col_wa = st.columns([1, 1])
                     with col_tel:
@@ -246,7 +247,7 @@ with tab1:
                     
                     st.write(f"📍 **Ubicación:** {cand.direccion if cand.direccion else 'No especificado'}")
                     
-                    # --- GESTIÓN DE CV PDF (SIN PREVISUALIZADOR) ---
+                    # --- GESTIÓN DE CV PDF ---
                     if cand.archivo_cv:
                         st.download_button(
                             label="📥 Descargar CV (PDF)",
@@ -261,11 +262,11 @@ with tab1:
                     
                     st.write("---")
                     
-                    # --- FORMULARIO DE EDICIÓN AMPLIADO PARA CORREGIR ERRORES ---
+                    # --- FORMULARIO DE EDICIÓN AMPLIADO ---
                     with st.form(key=f"form_update_{post.id}"):
                         st.markdown("✏️ **Corregir / Editar Ficha del Postulante**")
                         
-                        # Campos de edición directa del candidato (Datos personales)
+                        # Campos de edición directa del candidato
                         nuevo_nombre = st.text_input("Nombre del Candidato:", value=cand.nombre)
                         nuevo_email = st.text_input("Email:", value=cand.email)
                         nuevo_telefono = st.text_input("Teléfono:", value=cand.telefono if cand.telefono else "")
@@ -276,7 +277,7 @@ with tab1:
                         # Gestión del proceso
                         estado_actual = post.estado_proceso
                         
-                        # Normalizar textos viejos de la base de datos para mapearlos al índice correcto
+                        # Normalizar textos viejos de la base de datos
                         if estado_actual == "CV recibido":
                             estado_actual = "CV Recibido"
                         elif estado_actual in ["Rechazado", "Perfil en Reserva"]:
@@ -292,6 +293,7 @@ with tab1:
                         
                         col_save, col_del = st.columns([1, 1])
                         with col_save:
+                            # --- [CAMBIO 2] BOTÓN DE GUARDADO CON DISQUETE 💾 ---
                             if st.form_submit_button("💾 Guardar Cambios", use_container_width=True):
                                 try:
                                     # 1. Actualizamos datos de la tabla Candidato
@@ -312,6 +314,7 @@ with tab1:
                                     st.error(f"Error al intentar guardar los cambios: {e}")
                                 
                         with col_del:
+                            # --- [CAMBIO 3] BOTÓN DE ELIMINAR CON TACHITO 🗑️ ---
                             if st.form_submit_button("🗑️ Eliminar Postulación", use_container_width=True):
                                 try:
                                     session.delete(post)
