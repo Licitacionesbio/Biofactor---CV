@@ -221,33 +221,38 @@ with tab1:
                 if busqueda.lower() not in texto_completo:
                     continue
                 
-                # --- TUERCA ⚙️ EN CADA EXPANDER DE CANDIDATO ---
-                with st.expander(f"⚙️ {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
-                    st.write(f"📧 **Email:** {cand.email}")
+                # --- CABECERA CON ÍCONO DE PERSONA (👤) ---
+                with st.expander(f"👤 {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
                     
-                    # --- MOSTRAR TELÉFONO CON ACCESO DIRECTO A WHATSAPP ---
-                    link_wa = obtener_link_whatsapp(cand.telefono)
-                    col_tel, col_wa = st.columns([1, 1])
-                    with col_tel:
-                        st.write(f"📞 **Teléfono:** {cand.telefono if cand.telefono else 'No registrado'}")
-                    with col_wa:
-                        if link_wa:
-                            boton_html = (
-                                f'<a href="{link_wa}" target="_blank" style="text-decoration: none;">'
-                                f'<button style="background-color: #25D366; color: white; border: none; padding: 8px 14px; '
-                                f'border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; display: inline-flex; '
-                                f'align-items: center; gap: 8px; box-shadow: 0px 2px 4px rgba(0,0,0,0.1);">'
-                                f'<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">'
-                                f'<path d="M13.601 2.326A7.85 7.85 0 0 0 8 0a7.85 7.85 0 0 0-7.3 4.7 7.86 7.86 0 0 0-.012 5.56L0 16l5.85-1.535a7.86 7.86 0 0 0 3.84 1.15H8a7.85 7.85 0 0 0 7.3-4.7 7.85 7.85 0 0 0-.7-8.59M8 14.377a6.55 6.55 0 0 1-3.336-.908l-.239-.142-3.481.913.93-3.39-.155-.247a6.55 6.55 0 0 1-1.124-3.666c0-3.62 2.953-6.57 6.574-6.57 1.75 0 3.396.68 4.63 1.914a6.55 6.55 0 0 1 1.91 4.65c-.001 3.62-2.953 6.57-6.573 6.57m3.191-4.415c-.176-.088-1.039-.513-1.2-.572-.162-.06-.279-.088-.396.088-.117.176-.45.572-.551.687-.101.117-.203.13-.379.043-.176-.088-.743-.274-1.416-.874-.524-.467-.878-1.045-.98-1.219-.101-.176-.01-.271.078-.358.079-.078.176-.205.264-.307.09-.102.119-.176.178-.293.06-.117.03-.22-.015-.307-.044-.088-.396-.954-.543-1.307-.143-.347-.289-.299-.396-.305-.101-.005-.218-.005-.335-.005-.117 0-.308.043-.469.218-.161.176-.615.601-.615 1.464s.626 1.696.714 1.815c.088.118 1.23 1.877 2.981 2.631.417.18.742.287.996.368.419.133.801.114 1.102.069.336-.05 1.039-.425 1.186-.835.147-.41.147-.762.103-.835-.045-.074-.162-.118-.338-.206"/>'
-                                f'</svg>'
-                                f'Enviar WhatsApp'
-                                f'</button></a>'
-                            )
-                            st.markdown(boton_html, unsafe_allow_html=True)
-                    
-                    st.write(f"📍 **Ubicación:** {cand.direccion if cand.direccion else 'No especificado'}")
-                    
-                    # --- GESTIÓN DE CV PDF ---
+                    # --- VISTA LIMPIA: SOLO LECTURA ---
+                    col_info_1, col_info_2 = st.columns([1, 1])
+                    with col_info_1:
+                        st.markdown(f"📧 **Email:** {cand.email}")
+                        st.markdown(f"📍 **Ubicación:** {cand.direccion if cand.direccion else 'No especificada'}")
+                    with col_info_2:
+                        # Teléfono con acceso a WhatsApp
+                        link_wa = obtener_link_whatsapp(cand.telefono)
+                        col_sub_tel, col_sub_wa = st.columns([1.2, 1])
+                        with col_sub_tel:
+                            st.markdown(f"📞 **Teléfono:** {cand.telefono if cand.telefono else 'No registrado'}")
+                        with col_sub_wa:
+                            if link_wa:
+                                boton_html = (
+                                    f'<a href="{link_wa}" target="_blank" style="text-decoration: none;">'
+                                    f'<button style="background-color: #25D366; color: white; border: none; padding: 6px 12px; '
+                                    f'border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; display: inline-flex; '
+                                    f'align-items: center; gap: 6px; box-shadow: 0px 1px 3px rgba(0,0,0,0.1);">'
+                                    f'<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16">'
+                                    f'<path d="M13.601 2.326A7.85 7.85 0 0 0 8 0a7.85 7.85 0 0 0-7.3 4.7 7.86 7.86 0 0 0-.012 5.56L0 16l5.85-1.535a7.86 7.86 0 0 0 3.84 1.15H8a7.85 7.85 0 0 0 7.3-4.7 7.85 7.85 0 0 0-.7-8.59M8 14.377a6.55 6.55 0 0 1-3.336-.908l-.239-.142-3.481.913.93-3.39-.155-.247a6.55 6.55 0 0 1-1.124-3.666c0-3.62 2.953-6.57 6.574-6.57 1.75 0 3.396.68 4.63 1.914a6.55 6.55 0 0 1 1.91 4.65c-.001 3.62-2.953 6.57-6.573 6.57m3.191-4.415c-.176-.088-1.039-.513-1.2-.572-.162-.06-.279-.088-.396.088-.117.176-.45.572-.551.687-.101.117-.203.13-.379.043-.176-.088-.743-.274-1.416-.874-.524-.467-.878-1.045-.98-1.219-.101-.176-.01-.271.078-.358.079-.078.176-.205.264-.307.09-.102.119-.176.178-.293.06-.117.03-.22-.015-.307-.044-.088-.396-.954-.543-1.307-.143-.347-.289-.299-.396-.305-.101-.005-.218-.005-.335-.005-.117 0-.308.043-.469.218-.161.176-.615.601-.615 1.464s.626 1.696.714 1.815c.088.118 1.23 1.877 2.981 2.631.417.18.742.287.996.368.419.133.801.114 1.102.069.336-.05 1.039-.425 1.186-.835.147-.41.147-.762.103-.835-.045-.074-.162-.118-.338-.206"/>'
+                                    f'</svg>'
+                                    f'WhatsApp'
+                                    f'</button></a>'
+                                )
+                                st.markdown(boton_html, unsafe_allow_html=True)
+
+                    st.markdown(f"📝 **Notas actuales:** {post.notes if post.notes else '*Sin notas*'}")
+
+                    # Descarga del CV
                     if cand.archivo_cv:
                         st.download_button(
                             label="📥 Descargar CV (PDF)",
@@ -262,85 +267,87 @@ with tab1:
                     
                     st.write("---")
                     
-                    # --- FORMULARIO DE EDICIÓN ---
-                    with st.form(key=f"form_update_{post.id}"):
-                        
-                        # Campos de edición directa del candidato
-                        nuevo_nombre = st.text_input("Nombre del Candidato:", value=cand.nombre)
-                        nuevo_email = st.text_input("Email:", value=cand.email)
-                        nuevo_telefono = st.text_input("Teléfono:", value=cand.telefono if cand.telefono else "")
-                        nueva_direccion = st.text_input("Dirección:", value=cand.direccion if cand.direccion else "")
-                        
-                        st.markdown("---")
-                        
-                        # Gestión del proceso
-                        estado_actual = post.estado_proceso
-                        
-                        # Normalizar textos viejos de la base de datos
-                        if estado_actual == "CV recibido":
-                            estado_actual = "CV Recibido"
-                        elif estado_actual in ["Rechazado", "Perfil en Reserva"]:
-                            estado_actual = "No Aplica"
-                        elif estado_actual in ["Entrevista con Gerencia", "Entrevista con gerencia"]:
-                            estado_actual = "Entrevista Gerencia"
+                    # --- MODO EDICIÓN OCULTO POR DEFECTO ---
+                    editar_activo = st.checkbox("✏️ Editar datos del candidato", key=f"check_edit_{post.id}")
+                    
+                    if editar_activo:
+                        with st.form(key=f"form_update_{post.id}"):
+                            # Campos de edición directa del candidato
+                            nuevo_nombre = st.text_input("Nombre del Candidato:", value=cand.nombre)
+                            nuevo_email = st.text_input("Email:", value=cand.email)
+                            nuevo_telefono = st.text_input("Teléfono:", value=cand.telefono if cand.telefono else "")
+                            nueva_direccion = st.text_input("Dirección:", value=cand.direccion if cand.direccion else "")
                             
-                        idx_actual = ETAPAS_PROCESO.index(estado_actual) if estado_actual in ETAPAS_PROCESO else 0
-                        
-                        nuevo_est = st.selectbox("Cambiar Etapa:", ETAPAS_PROCESO, index=idx_actual)
-                        notes_actuales = post.notes if post.notes else ""
-                        nuevas_notas = st.text_area("Notas / Comentarios Internos:", value=notes_actuales)
-                        
-                        # --- FILA DE 3 BOTONES ALINEADOS ABAJO DE LAS NOTAS ---
-                        col_save, col_edit, col_del = st.columns([1, 1, 1])
-                        
-                        with col_save:
-                            if st.form_submit_button("💾 Guardar", use_container_width=True):
-                                try:
-                                    # Actualizamos datos del Candidato
-                                    cand.nombre = nuevo_nombre
-                                    cand.email = nuevo_email
-                                    cand.telefono = nuevo_telefono
-                                    cand.direccion = nueva_direccion
-                                    
-                                    # Actualizamos datos de la Postulacion
-                                    post.estado_proceso = nuevo_est
-                                    post.notes = nuevas_notas
-                                    
-                                    session.commit()
-                                    st.success("¡Datos guardados con éxito!")
-                                    st.rerun()
-                                except Exception as e:
-                                    session.rollback()
-                                    st.error(f"Error al intentar guardar los cambios: {e}")
-                                    
-                        with col_edit:
-                            if st.form_submit_button("✏️ Editar", use_container_width=True):
-                                try:
-                                    cand.nombre = nuevo_nombre
-                                    cand.email = nuevo_email
-                                    cand.telefono = nuevo_telefono
-                                    cand.direccion = nueva_direccion
-                                    
-                                    post.estado_proceso = nuevo_est
-                                    post.notes = nuevas_notas
-                                    
-                                    session.commit()
-                                    st.success("¡Ficha editada con éxito!")
-                                    st.rerun()
-                                except Exception as e:
-                                    session.rollback()
-                                    st.error(f"Error al intentar aplicar la edición: {e}")
-                                    
-                        with col_del:
-                            if st.form_submit_button("🗑️ Eliminar", use_container_width=True):
-                                try:
-                                    session.delete(post)
-                                    session.commit()
-                                    st.warning("Postulación eliminada.")
-                                    st.rerun()
-                                except Exception as e:
-                                    session.rollback()
-                                    st.error(f"No se pudo eliminar: {e}")
+                            st.markdown("---")
+                            
+                            # Gestión del proceso
+                            estado_actual = post.estado_proceso
+                            
+                            # Normalizar textos viejos de la base de datos
+                            if estado_actual == "CV recibido":
+                                estado_actual = "CV Recibido"
+                            elif estado_actual in ["Rechazado", "Perfil en Reserva"]:
+                                estado_actual = "No Aplica"
+                            elif estado_actual in ["Entrevista con Gerencia", "Entrevista con gerencia"]:
+                                estado_actual = "Entrevista Gerencia"
+                                
+                            idx_actual = ETAPAS_PROCESO.index(estado_actual) if estado_actual in ETAPAS_PROCESO else 0
+                            
+                            nuevo_est = st.selectbox("Cambiar Etapa:", ETAPAS_PROCESO, index=idx_actual)
+                            notes_actuales = post.notes if post.notes else ""
+                            nuevas_notas = st.text_area("Notas / Comentarios Internos:", value=notes_actuales)
+                            
+                            # --- FILA DE 3 BOTONES ALINEADOS ABAJO DE LAS NOTAS ---
+                            col_save, col_edit, col_del = st.columns([1, 1, 1])
+                            
+                            with col_save:
+                                if st.form_submit_button("💾 Guardar", use_container_width=True):
+                                    try:
+                                        # Actualizamos datos del Candidato
+                                        cand.nombre = nuevo_nombre
+                                        cand.email = nuevo_email
+                                        cand.telefono = nuevo_telefono
+                                        cand.direccion = nueva_direccion
+                                        
+                                        # Actualizamos datos de la Postulacion
+                                        post.estado_proceso = nuevo_est
+                                        post.notes = nuevas_notas
+                                        
+                                        session.commit()
+                                        st.success("¡Datos guardados con éxito!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        session.rollback()
+                                        st.error(f"Error al intentar guardar los cambios: {e}")
+                                        
+                            with col_edit:
+                                if st.form_submit_button("✏️ Editar", use_container_width=True):
+                                    try:
+                                        cand.nombre = nuevo_nombre
+                                        cand.email = nuevo_email
+                                        cand.telefono = nuevo_telefono
+                                        cand.direccion = nueva_direccion
+                                        
+                                        post.estado_proceso = nuevo_est
+                                        post.notes = nuevas_notas
+                                        
+                                        session.commit()
+                                        st.success("¡Ficha editada con éxito!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        session.rollback()
+                                        st.error(f"Error al intentar aplicar la edición: {e}")
+                                        
+                            with col_del:
+                                if st.form_submit_button("🗑️ Eliminar", use_container_width=True):
+                                    try:
+                                        session.delete(post)
+                                        session.commit()
+                                        st.warning("Postulación eliminada.")
+                                        st.rerun()
+                                    except Exception as e:
+                                        session.rollback()
+                                        st.error(f"No se pudo eliminar: {e}")
 
 # --- PESTAÑA 2: LECTOR DE PDF ---
 with tab2:
