@@ -37,6 +37,30 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
 
+# --- DEFINICIÓN DE ETAPAS OFICIALES EN ORDEN ---
+ETAPAS_PROCESO = [
+    "CV Recibido",
+    "Entrevista Director Comercial",
+    "Entrevista RRHH",
+    "Entrevista Presencial",
+    "Entrevista Gerencia",
+    "Aplica",
+    "No Aplica",
+    "Preocupacional",
+    "Contratado"
+]
+
+# Etapas que se consideran activas dentro del proceso de selección
+ETAPAS_ACTIVAS = [
+    "CV Recibido",
+    "Entrevista Director Comercial",
+    "Entrevista RRHH",
+    "Entrevista Presencial",
+    "Entrevista Gerencia",
+    "Aplica",
+    "Preocupacional"
+]
+
 # --- FUNCIÓN AUXILIAR PARA LIMPIAR TELÉFONO Y CREAR LINK DE WHATSAPP ---
 def obtener_link_whatsapp(telefono_str):
     if not telefono_str:
@@ -48,8 +72,6 @@ def obtener_link_whatsapp(telefono_str):
     
     # Si el número no tiene código de país (ej: empieza con 11 o 341 en Argentina), le agregamos el '54' de Argentina por defecto
     if len(numeros) <= 10 and not numeros.startswith("54"):
-        # Si empieza con un '15' (común en celulares de Argentina), se lo solemos quitar para el formato internacional de WhatsApp,
-        # pero para mantenerlo simple y directo, le anteponemos el código de país.
         numeros = "54" + numeros
         
     return f"https://wa.me/{numeros}"
@@ -94,22 +116,11 @@ with tab3:
 # --- PESTAÑA 1: PANEL DE GESTIÓN RRHH ---
 with tab1:
     # --- CÁLCULO DE CONTADORES EN TIEMPO REAL ---
-    # Etapas activas del proceso
-    etapas_activas = [
-        "CV recibido", 
-        "Entrevista Director Comercial", 
-        "Entrevista RRHH", 
-        "Entrevista Presencial", 
-        "Entrevista con Gerencia",
-        "Aplica",
-        "Preocupacional"
-    ]
-    
     try:
         total_todos = session.query(Postulacion).count()
         
         total_activos = session.query(Postulacion).filter(
-            Postulacion.estado_proceso.in_(etapas_activas)
+            Postulacion.estado_proceso.in_(ETAPAS_ACTIVAS)
         ).count()
         
         total_contratados = session.query(Postulacion).filter(
@@ -186,9 +197,9 @@ with tab1:
             postulaciones_db = []
 
         for post in postulaciones_db:
-            # --- FILTRADO POR EL BOTÓN SELECCIONADO A LA IZQUIERDA ---
+            # --- FILTRADO DINÁMICO POR EL BOTÓN SELECCIONADO A LA IZQUIERDA ---
             if st.session_state.filtro_estado == "Activos":
-                if post.estado_proceso not in etapas_activas:
+                if post.estado_proceso not in ETAPAS_ACTIVAS:
                     continue
             elif st.session_state.filtro_estado == "Contratados":
                 if post.estado_proceso != "Contratado":
@@ -220,7 +231,6 @@ with tab1:
                         st.write(f"📞 **Teléfono:** {cand.telefono if cand.telefono else 'No registrado'}")
                     with col_wa:
                         if link_wa:
-                            # Creamos un botón HTML estilizado con el color verde oficial de WhatsApp
                             boton_html = (
                                 f'<a href="{link_wa}" target="_blank" style="text-decoration: none;">'
                                 f'<button style="background-color: #25D366; color: white; border: none; padding: 6px 12px; '
@@ -249,28 +259,19 @@ with tab1:
                     
                     # --- FORMULARIO DE EDICIÓN CON FLUJO CORREGIDO ---
                     with st.form(key=f"form_update_{post.id}"):
-                        # Etapas reordenadas secuencialmente
-                        estados = [
-                            "CV recibido",
-                            "Entrevista Director Comercial",
-                            "Entrevista RRHH",
-                            "Entrevista Presencial",
-                            "Entrevista con Gerencia",
-                            "Aplica",
-                            "Preocupacional",
-                            "Contratado",
-                            "No Aplica"
-                        ]
-                        
                         estado_actual = post.estado_proceso
-                        if estado_actual in ["Rechazado", "Perfil en Reserva"]:
-                            estado_actual = "No Aplica"
-                        elif estado_actual == "CV Recibido":
-                            estado_actual = "CV recibido"
-                            
-                        idx_actual = estados.index(estado_actual) if estado_actual in estados else 0
                         
-                        nuevo_est = st.selectbox("Cambiar Etapa:", estados, index=idx_actual)
+                        # Normalizar textos viejos de la base de datos para mapearlos al índice correcto
+                        if estado_actual == "CV recibido":
+                            estado_actual = "CV Recibido"
+                        elif estado_actual in ["Rechazado", "Perfil en Reserva"]:
+                            estado_actual = "No Aplica"
+                        elif estado_actual in ["Entrevista con Gerencia", "Entrevista con gerencia"]:
+                            estado_actual = "Entrevista Gerencia"
+                            
+                        idx_actual = ETAPAS_PROCESO.index(estado_actual) if estado_actual in ETAPAS_PROCESO else 0
+                        
+                        nuevo_est = st.selectbox("Cambiar Etapa:", ETAPAS_PROCESO, index=idx_actual)
                         notes_actuales = post.notes if post.notes else ""
                         nuevas_notas = st.text_area("Notas / Comentarios:", value=notes_actuales)
                         
@@ -359,7 +360,7 @@ with tab2:
                             session.add(Postulacion(
                                 candidato_id=candidato_id, 
                                 vacante_id=opciones_vacantes[puesto_sel], 
-                                estado_proceso="CV recibido", 
+                                estado_proceso="CV Recibido", 
                                 notes="CV subido al sistema Biofactor."
                             ))
                             session.commit()
