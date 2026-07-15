@@ -221,7 +221,7 @@ with tab1:
                 if busqueda.lower() not in texto_completo:
                     continue
                 
-                # --- [CAMBIO 1] TUERCA ⚙️ EN CADA EXPANDER DE CANDIDATO ---
+                # --- TUERCA ⚙️ EN CADA EXPANDER DE CANDIDATO ---
                 with st.expander(f"⚙️ {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
                     st.write(f"📧 **Email:** {cand.email}")
                     
@@ -262,9 +262,8 @@ with tab1:
                     
                     st.write("---")
                     
-                    # --- FORMULARIO DE EDICIÓN AMPLIADO ---
+                    # --- FORMULARIO DE EDICIÓN ---
                     with st.form(key=f"form_update_{post.id}"):
-                        st.markdown("✏️ **Corregir / Editar Ficha del Postulante**")
                         
                         # Campos de edición directa del candidato
                         nuevo_nombre = st.text_input("Nombre del Candidato:", value=cand.nombre)
@@ -291,7 +290,7 @@ with tab1:
                         notes_actuales = post.notes if post.notes else ""
                         nuevas_notas = st.text_area("Notas / Comentarios Internos:", value=notes_actuales)
                         
-                        # --- NUEVA SECCIÓN DE 3 BOTONES ALINEADOS ABAJO DE LAS NOTAS ---
+                        # --- FILA DE 3 BOTONES ALINEADOS ABAJO DE LAS NOTAS ---
                         col_save, col_edit, col_del = st.columns([1, 1, 1])
                         
                         with col_save:
@@ -315,9 +314,8 @@ with tab1:
                                     st.error(f"Error al intentar guardar los cambios: {e}")
                                     
                         with col_edit:
-                            if st.form_submit_button("✏️ Corregir", use_container_width=True):
+                            if st.form_submit_button("✏️ Editar", use_container_width=True):
                                 try:
-                                    # Mismo guardado pero con feedback visual de "corregido"
                                     cand.nombre = nuevo_nombre
                                     cand.email = nuevo_email
                                     cand.telefono = nuevo_telefono
@@ -327,11 +325,11 @@ with tab1:
                                     post.notes = nuevas_notas
                                     
                                     session.commit()
-                                    st.success("¡Ficha corregida con éxito!")
+                                    st.success("¡Ficha editada con éxito!")
                                     st.rerun()
                                 except Exception as e:
                                     session.rollback()
-                                    st.error(f"Error al intentar aplicar la corrección: {e}")
+                                    st.error(f"Error al intentar aplicar la edición: {e}")
                                     
                         with col_del:
                             if st.form_submit_button("🗑️ Eliminar", use_container_width=True):
