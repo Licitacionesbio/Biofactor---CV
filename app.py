@@ -291,31 +291,50 @@ with tab1:
                         notes_actuales = post.notes if post.notes else ""
                         nuevas_notas = st.text_area("Notas / Comentarios Internos:", value=notes_actuales)
                         
-                        col_save, col_del = st.columns([1, 1])
+                        # --- NUEVA SECCIÓN DE 3 BOTONES ALINEADOS ABAJO DE LAS NOTAS ---
+                        col_save, col_edit, col_del = st.columns([1, 1, 1])
+                        
                         with col_save:
-                            # --- [CAMBIO 2] BOTÓN DE GUARDADO CON DISQUETE 💾 ---
-                            if st.form_submit_button("💾 Guardar Cambios", use_container_width=True):
+                            if st.form_submit_button("💾 Guardar", use_container_width=True):
                                 try:
-                                    # 1. Actualizamos datos de la tabla Candidato
+                                    # Actualizamos datos del Candidato
                                     cand.nombre = nuevo_nombre
                                     cand.email = nuevo_email
                                     cand.telefono = nuevo_telefono
                                     cand.direccion = nueva_direccion
                                     
-                                    # 2. Actualizamos datos de la tabla Postulacion
+                                    # Actualizamos datos de la Postulacion
                                     post.estado_proceso = nuevo_est
                                     post.notes = nuevas_notas
                                     
                                     session.commit()
-                                    st.success("¡Datos actualizados correctamente!")
+                                    st.success("¡Datos guardados con éxito!")
                                     st.rerun()
                                 except Exception as e:
                                     session.rollback()
                                     st.error(f"Error al intentar guardar los cambios: {e}")
-                                
+                                    
+                        with col_edit:
+                            if st.form_submit_button("✏️ Corregir", use_container_width=True):
+                                try:
+                                    # Mismo guardado pero con feedback visual de "corregido"
+                                    cand.nombre = nuevo_nombre
+                                    cand.email = nuevo_email
+                                    cand.telefono = nuevo_telefono
+                                    cand.direccion = nueva_direccion
+                                    
+                                    post.estado_proceso = nuevo_est
+                                    post.notes = nuevas_notas
+                                    
+                                    session.commit()
+                                    st.success("¡Ficha corregida con éxito!")
+                                    st.rerun()
+                                except Exception as e:
+                                    session.rollback()
+                                    st.error(f"Error al intentar aplicar la corrección: {e}")
+                                    
                         with col_del:
-                            # --- [CAMBIO 3] BOTÓN DE ELIMINAR CON TACHITO 🗑️ ---
-                            if st.form_submit_button("🗑️ Eliminar Postulación", use_container_width=True):
+                            if st.form_submit_button("🗑️ Eliminar", use_container_width=True):
                                 try:
                                     session.delete(post)
                                     session.commit()
