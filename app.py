@@ -224,7 +224,7 @@ with tab1:
                 # --- CABECERA CON ÍCONO DE PERSONA (👤) ---
                 with st.expander(f"👤 {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
                     
-                    # --- VISTA LIMPIA: DATOS DE CONTACTO ---
+                    # --- 1. VISTA LIMPIA DE CONTACTO ---
                     col_info_1, col_info_2 = st.columns([1, 1])
                     with col_info_1:
                         st.markdown(f"📧 **Email:** {cand.email}")
@@ -250,11 +250,6 @@ with tab1:
                                 )
                                 st.markdown(boton_html, unsafe_allow_html=True)
 
-                    # --- INFORMACIÓN DE SELECCIÓN (ESTADO Y NOTAS SIEMPRE VISIBLES) ---
-                    st.markdown(f"📈 **Estado de la Postulación:** `{post.estado_proceso}`")
-                    st.markdown(f"📝 **Notas / Comentarios Internos:** {post.notes if post.notes else '*Sin notas registradas*'}")
-
-                    # Descarga del CV
                     if cand.archivo_cv:
                         st.download_button(
                             label="📥 Descargar CV (PDF)",
@@ -266,90 +261,78 @@ with tab1:
                         )
                     else:
                         st.info("No hay un archivo PDF guardado.")
-                    
+
                     st.write("---")
+
+                    # --- 2. GESTIÓN DIRECTA DE SELECCIÓN (ESTADO Y NOTAS SIEMPRE EDITABLES) ---
+                    with st.form(key=f"form_quick_update_{post.id}"):
+                        st.markdown("### 📋 Seguimiento de Postulación")
+                        
+                        estado_actual = post.estado_proceso
+                        # Normalizar textos viejos de la base de datos
+                        if estado_actual == "CV recibido":
+                            estado_actual = "CV Recibido"
+                        elif estado_actual in ["Rechazado", "Perfil en Reserva"]:
+                            estado_actual = "No Aplica"
+                        elif estado_actual in ["Entrevista con Gerencia", "Entrevista con gerencia"]:
+                            estado_actual = "Entrevista Gerencia"
+                            
+                        idx_actual = ETAPAS_PROCESO.index(estado_actual) if estado_actual in ETAPAS_PROCESO else 0
+                        
+                        col_select, col_empty = st.columns([1, 1])
+                        with col_select:
+                            nuevo_est = st.selectbox("Etapa Actual:", ETAPAS_PROCESO, index=idx_actual, key=f"sel_{post.id}")
+                        
+                        notes_actuales = post.notes if post.notes else ""
+                        nuevas_notas = st.text_area("Notas / Comentarios Internos:", value=notes_actuales, key=f"notes_{post.id}")
+                        
+                        # Botones para guardar estado/notas o eliminar postulación
+                        col_save_quick, col_del_quick = st.columns([3, 1])
+                        with col_save_quick:
+                            if st.form_submit_button("💾 Guardar Estado y Notas", use_container_width=True):
+                                try:
+                                    post.estado_proceso = nuevo_est
+                                    post.notes = nuevas_notas
+                                    session.commit()
+                                    st.success("¡Estado y notas actualizados!")
+                                    st.rerun()
+                                except Exception as e:
+                                    session.rollback()
+                                    st.error(f"Error al guardar: {e}")
+                        with col_del_quick:
+                            if st.form_submit_button("🗑️ Eliminar Postulación", use_container_width=True):
+                                try:
+                                    session.delete(post)
+                                    session.commit()
+                                    st.warning("Postulación eliminada.")
+                                    st.rerun()
+                                except Exception as e:
+                                    session.rollback()
+                                    st.error(f"No se pudo eliminar: {e}")
+
+                    # --- 3. MODAL OCULTO SÓLO PARA CAMBIAR DATOS DE CONTACTO ---
+                    editar_contacto = st.checkbox("⚙️ Editar datos de contacto (Nombre, Email, Teléfono, Dirección)", key=f"check_edit_contact_{post.id}")
                     
-                    # --- MODO EDICIÓN OCULTO POR DEFECTO ---
-                    editar_activo = st.checkbox("✏️ Editar datos / etapa del candidato", key=f"check_edit_{post.id}")
-                    
-                    if editar_activo:
-                        with st.form(key=f"form_update_{post.id}"):
-                            # Campos de edición directa del candidato
+                    if editar_contacto:
+                        with st.form(key=f"form_contact_{post.id}"):
+                            st.markdown("### ✏️ Modificar Información de Contacto")
                             nuevo_nombre = st.text_input("Nombre del Candidato:", value=cand.nombre)
                             nuevo_email = st.text_input("Email:", value=cand.email)
                             nuevo_telefono = st.text_input("Teléfono:", value=cand.telefono if cand.telefono else "")
                             nueva_direccion = st.text_input("Dirección:", value=cand.direccion if cand.direccion else "")
                             
-                            st.markdown("---")
-                            
-                            # Gestión del proceso
-                            estado_actual = post.estado_proceso
-                            
-                            # Normalizar textos viejos de la base de datos
-                            if estado_actual == "CV recibido":
-                                estado_actual = "CV Recibido"
-                            elif estado_actual in ["Rechazado", "Perfil en Reserva"]:
-                                estado_actual = "No Aplica"
-                            elif estado_actual in ["Entrevista con Gerencia", "Entrevista con gerencia"]:
-                                estado_actual = "Entrevista Gerencia"
-                                
-                            idx_actual = ETAPAS_PROCESO.index(estado_actual) if estado_actual in ETAPAS_PROCESO else 0
-                            
-                            nuevo_est = st.selectbox("Cambiar Etapa:", ETAPAS_PROCESO, index=idx_actual)
-                            notes_actuales = post.notes if post.notes else ""
-                            nuevas_notas = st.text_area("Notas / Comentarios Internos:", value=notes_actuales)
-                            
-                            # --- FILA DE 3 BOTONES ALINEADOS ---
-                            col_save, col_edit, col_del = st.columns([1, 1, 1])
-                            
-                            with col_save:
-                                if st.form_submit_button("💾 Guardar", use_container_width=True):
-                                    try:
-                                        # Actualizamos datos del Candidato
-                                        cand.nombre = nuevo_nombre
-                                        cand.email = nuevo_email
-                                        cand.telefono = nuevo_telefono
-                                        cand.direccion = nueva_direccion
-                                        
-                                        # Actualizamos datos de la Postulacion
-                                        post.estado_proceso = nuevo_est
-                                        post.notes = nuevas_notas
-                                        
-                                        session.commit()
-                                        st.success("¡Datos guardados con éxito!")
-                                        st.rerun()
-                                    except Exception as e:
-                                        session.rollback()
-                                        st.error(f"Error al intentar guardar los cambios: {e}")
-                                        
-                            with col_edit:
-                                if st.form_submit_button("✏️ Editar", use_container_width=True):
-                                    try:
-                                        cand.nombre = nuevo_nombre
-                                        cand.email = nuevo_email
-                                        cand.telefono = nuevo_telefono
-                                        cand.direccion = nueva_direccion
-                                        
-                                        post.estado_proceso = nuevo_est
-                                        post.notes = nuevas_notas
-                                        
-                                        session.commit()
-                                        st.success("¡Ficha editada con éxito!")
-                                        st.rerun()
-                                    except Exception as e:
-                                        session.rollback()
-                                        st.error(f"Error al intentar aplicar la edición: {e}")
-                                        
-                            with col_del:
-                                if st.form_submit_button("🗑️ Eliminar", use_container_width=True):
-                                    try:
-                                        session.delete(post)
-                                        session.commit()
-                                        st.warning("Postulación eliminada.")
-                                        st.rerun()
-                                    except Exception as e:
-                                        session.rollback()
-                                        st.error(f"No se pudo eliminar: {e}")
+                            if st.form_submit_button("💾 Guardar Cambios de Contacto", use_container_width=True):
+                                try:
+                                    cand.nombre = nuevo_nombre
+                                    cand.email = nuevo_email
+                                    cand.telefono = nuevo_telefono
+                                    cand.direccion = nueva_direccion
+                                    session.commit()
+                                    st.success("¡Datos de contacto actualizados!")
+                                    st.rerun()
+                                except Exception as e:
+                                    session.rollback()
+                                    st.error(f"Error al intentar guardar los datos de contacto: {e}")
 
 # --- PESTAÑA 2: LECTOR DE PDF ---
 with tab2:
