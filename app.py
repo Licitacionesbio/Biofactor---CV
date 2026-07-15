@@ -15,7 +15,7 @@ if "database" in st.secrets:
     if DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
     elif DATABASE_URL.startswith("postgresql://"):
-        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+        DATABASE_URL = DATABASE_URL.replace("postgresql+psycopg2://", "postgresql+psycopg2://", 1)
     
     try:
         engine = create_engine(DATABASE_URL, connect_args={"sslmode": "require"})
@@ -261,8 +261,19 @@ with tab1:
                     
                     st.write("---")
                     
-                    # --- FORMULARIO DE EDICIÓN CON FLUJO CORREGIDO ---
+                    # --- FORMULARIO DE EDICIÓN AMPLIADO PARA CORREGIR ERRORES ---
                     with st.form(key=f"form_update_{post.id}"):
+                        st.markdown("✏️ **Corregir / Editar Ficha del Postulante**")
+                        
+                        # Campos de edición directa del candidato (Datos personales)
+                        nuevo_nombre = st.text_input("Nombre del Candidato:", value=cand.nombre)
+                        nuevo_email = st.text_input("Email:", value=cand.email)
+                        nuevo_telefono = st.text_input("Teléfono:", value=cand.telefono if cand.telefono else "")
+                        nueva_direccion = st.text_input("Dirección:", value=cand.direccion if cand.direccion else "")
+                        
+                        st.markdown("---")
+                        
+                        # Gestión del proceso
                         estado_actual = post.estado_proceso
                         
                         # Normalizar textos viejos de la base de datos para mapearlos al índice correcto
@@ -277,16 +288,28 @@ with tab1:
                         
                         nuevo_est = st.selectbox("Cambiar Etapa:", ETAPAS_PROCESO, index=idx_actual)
                         notes_actuales = post.notes if post.notes else ""
-                        nuevas_notas = st.text_area("Notas / Comentarios:", value=notes_actuales)
+                        nuevas_notas = st.text_area("Notas / Comentarios Internos:", value=notes_actuales)
                         
                         col_save, col_del = st.columns([1, 1])
                         with col_save:
-                            if st.form_submit_button("Guardar Cambios", use_container_width=True):
-                                post.estado_proceso = nuevo_est
-                                post.notes = nuevas_notas
-                                session.commit()
-                                st.success("¡Candidato actualizado!")
-                                st.rerun()
+                            if st.form_submit_button("💾 Guardar Cambios", use_container_width=True):
+                                try:
+                                    # 1. Actualizamos datos de la tabla Candidato
+                                    cand.nombre = nuevo_nombre
+                                    cand.email = nuevo_email
+                                    cand.telefono = nuevo_telefono
+                                    cand.direccion = nueva_direccion
+                                    
+                                    # 2. Actualizamos datos de la tabla Postulacion
+                                    post.estado_proceso = nuevo_est
+                                    post.notes = nuevas_notas
+                                    
+                                    session.commit()
+                                    st.success("¡Datos actualizados correctamente!")
+                                    st.rerun()
+                                except Exception as e:
+                                    session.rollback()
+                                    st.error(f"Error al intentar guardar los cambios: {e}")
                                 
                         with col_del:
                             if st.form_submit_button("🗑️ Eliminar Postulación", use_container_width=True):
