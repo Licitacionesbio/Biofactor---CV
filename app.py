@@ -4,7 +4,6 @@ from sqlalchemy.orm import sessionmaker
 from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
-import base64
 
 st.set_page_config(page_title="Biofactor", layout="wide")
 
@@ -38,6 +37,23 @@ Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
 session = Session()
 
+# --- FUNCIÓN AUXILIAR PARA LIMPIAR TELÉFONO Y CREAR LINK DE WHATSAPP ---
+def obtener_link_whatsapp(telefono_str):
+    if not telefono_str:
+        return None
+    # Nos quedamos únicamente con los dígitos numéricos
+    numeros = re.sub(r'\D', '', telefono_str)
+    if not numeros:
+        return None
+    
+    # Si el número no tiene código de país (ej: empieza con 11 o 341 en Argentina), le agregamos el '54' de Argentina por defecto
+    if len(numeros) <= 10 and not numeros.startswith("54"):
+        # Si empieza con un '15' (común en celulares de Argentina), se lo solemos quitar para el formato internacional de WhatsApp,
+        # pero para mantenerlo simple y directo, le anteponemos el código de país.
+        numeros = "54" + numeros
+        
+    return f"https://wa.me/{numeros}"
+
 # --- LOGO Y TÍTULO ---
 col_logo, col_titulo = st.columns([1, 20])
 with col_logo:
@@ -55,7 +71,6 @@ with tab3:
     with st.form("form_crear_vacante"):
         nuevo_titulo = st.text_input("Nombre del Puesto (ej: Analista, Desarrollador):")
         
-        # Lista de áreas definitivas para Biofactor
         areas_preestablecidas = [
             "Area Comercial",
             "Area Tecnica",
@@ -64,7 +79,6 @@ with tab3:
             "Area Operativo"
         ]
         
-        # Menú desplegable con las áreas definitivas
         depto_seleccionado = st.selectbox("Área / Departamento:", areas_preestablecidas)
         
         if st.form_submit_button("Crear Puesto") and nuevo_titulo:
@@ -80,6 +94,7 @@ with tab3:
 # --- PESTAÑA 1: PANEL DE GESTIÓN RRHH ---
 with tab1:
     # --- CÁLCULO DE CONTADORES EN TIEMPO REAL ---
+    # Etapas activas del proceso
     etapas_activas = [
         "CV recibido", 
         "Entrevista Director Comercial", 
@@ -196,53 +211,45 @@ with tab1:
                     continue
                     
                 with st.expander(f"👤 {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
-                    st.write(f"📧 **Email:** {cand.email} | 📞 **Teléfono:** {cand.telefono}")
+                    st.write(f"📧 **Email:** {cand.email}")
+                    
+                    # --- MOSTRAR TELÉFONO CON ACCESO DIRECTO A WHATSAPP ---
+                    link_wa = obtener_link_whatsapp(cand.telefono)
+                    col_tel, col_wa = st.columns([1, 1])
+                    with col_tel:
+                        st.write(f"📞 **Teléfono:** {cand.telefono if cand.telefono else 'No registrado'}")
+                    with col_wa:
+                        if link_wa:
+                            # Creamos un botón HTML estilizado con el color verde oficial de WhatsApp
+                            boton_html = (
+                                f'<a href="{link_wa}" target="_blank" style="text-decoration: none;">'
+                                f'<button style="background-color: #25D366; color: white; border: none; padding: 6px 12px; '
+                                f'border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; display: inline-flex; align-items: center;">'
+                                f'💬 Enviar WhatsApp'
+                                f'</button></a>'
+                            )
+                            st.markdown(boton_html, unsafe_allow_html=True)
+                    
                     st.write(f"📍 **Ubicación:** {cand.direccion if cand.direccion else 'No especificado'}")
                     
-                    # --- GESTIÓN DE CV PDF ---
+                    # --- GESTIÓN DE CV PDF (SIN PREVISUALIZADOR) ---
                     if cand.archivo_cv:
-                        col_btn1, col_btn2 = st.columns([1, 1])
-                        with col_btn1:
-                            st.download_button(
-                                label="📥 Descargar CV (PDF)",
-                                data=cand.archivo_cv,
-                                file_name=f"CV_{cand.nombre.replace(' ', '_')}.pdf",
-                                mime="application/pdf",
-                                key=f"dl_{cand.id}_{post.id}"
-                            )
-                        with col_btn2:
-                            ver_pdf = st.checkbox("👀 Previsualizar CV en pantalla", key=f"ver_{cand.id}_{post.id}")
-                        
-                        if ver_pdf:
-                            try:
-                                base64_pdf = base64.b64encode(cand.archivo_cv).decode('utf-8')
-                                pdf_link = (
-                                    f'<a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="text-decoration: none;">'
-                                    f'<button style="background-color: #2e7d32; color: white; border: none; padding: 10px 20px; '
-                                    f'border-radius: 8px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px;">'
-                                    f'🔓 Abrir visualizador en pestaña completa'
-                                    f'</button></a>'
-                                )
-                                st.markdown(pdf_link, unsafe_allow_html=True)
-                                
-                                pdf_display = (
-                                    f'<object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="600">'
-                                    f'<div style="text-align: center; padding: 20px; border: 1px dashed #ccc; border-radius: 8px;">'
-                                    f'⚠️ Bloqueo de previsualización activa.<br><br>'
-                                    f'<a href="data:application/pdf;base64,{base64_pdf}" download="CV_{cand.nombre.replace(" ", "_")}.pdf" style="color: #FF4B4B; font-weight: bold;">[Descargar directo]</a>'
-                                    f'</div>'
-                                    f'</object>'
-                                )
-                                st.markdown(pdf_display, unsafe_allow_html=True)
-                            except Exception as e:
-                                st.error(f"No se pudo previsualizar: {e}")
+                        st.download_button(
+                            label="📥 Descargar CV (PDF)",
+                            data=cand.archivo_cv,
+                            file_name=f"CV_{cand.nombre.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            key=f"dl_{cand.id}_{post.id}",
+                            use_container_width=True
+                        )
                     else:
                         st.info("No hay un archivo PDF guardado.")
                     
                     st.write("---")
                     
-                    # --- FORMULARIO DE EDICIÓN ---
+                    # --- FORMULARIO DE EDICIÓN CON FLUJO CORREGIDO ---
                     with st.form(key=f"form_update_{post.id}"):
+                        # Etapas reordenadas secuencialmente
                         estados = [
                             "CV recibido",
                             "Entrevista Director Comercial",
@@ -251,8 +258,8 @@ with tab1:
                             "Entrevista con Gerencia",
                             "Aplica",
                             "Preocupacional",
-                            "No Aplica",
-                            "Contratado"
+                            "Contratado",
+                            "No Aplica"
                         ]
                         
                         estado_actual = post.estado_proceso
