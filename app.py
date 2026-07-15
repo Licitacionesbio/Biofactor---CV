@@ -68,14 +68,15 @@ with tab3:
 # --- PESTAÑA 1: PANEL DE GESTIÓN RRHH ---
 with tab1:
     # --- CÁLCULO DE CONTADORES EN TIEMPO REAL ---
-    # Sumamos "Entrevista con Gerencia" a la lista de etapas activas del proceso de selección
+    # Sumamos "Preocupacional" a las etapas activas para que sigan sumando en el contador de proceso
     etapas_activas = [
         "CV recibido", 
         "Entrevista Director Comercial", 
         "Entrevista RRHH", 
         "Entrevista Presencial", 
         "Entrevista con Gerencia",
-        "Aplica"
+        "Aplica",
+        "Preocupacional"
     ]
     
     try:
@@ -229,7 +230,7 @@ with tab1:
                     
                     st.write("---")
                     
-                    # --- FORMULARIO DE EDICIÓN CON "ENTREVISTA CON GERENCIA" ---
+                    # --- FORMULARIO DE EDICIÓN CON PREOCUPACIONAL ---
                     with st.form(key=f"form_update_{post.id}"):
                         estados = [
                             "CV recibido",
@@ -238,11 +239,12 @@ with tab1:
                             "Entrevista Presencial",
                             "Entrevista con Gerencia",
                             "Aplica",
+                            "Preocupacional",
                             "No Aplica",
                             "Contratado"
                         ]
                         
-                        # Mapeo inteligente para mantener la compatibilidad hacia atrás
+                        # Mapeo inteligente para evitar errores con estados viejos
                         estado_actual = post.estado_proceso
                         if estado_actual in ["Rechazado", "Perfil en Reserva"]:
                             estado_actual = "No Aplica"
