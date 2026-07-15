@@ -54,12 +54,24 @@ with tab3:
     st.subheader("Registrar una Nueva Búsqueda Laboral")
     with st.form("form_crear_vacante"):
         nuevo_titulo = st.text_input("Nombre del Puesto (ej: Analista, Desarrollador):")
-        depto = st.text_input("Área / Departamento:", value="Biofactor Hub")
+        
+        # Lista de áreas definitivas para Biofactor
+        areas_preestablecidas = [
+            "Area Comercial",
+            "Area Tecnica",
+            "Area Gerencial",
+            "Area Contable",
+            "Area Operativo"
+        ]
+        
+        # Menú desplegable con las áreas definitivas
+        depto_seleccionado = st.selectbox("Área / Departamento:", areas_preestablecidas)
+        
         if st.form_submit_button("Crear Puesto") and nuevo_titulo:
             try:
-                session.add(Vacante(titulo=nuevo_titulo, departamento=depto, estado="Abierta"))
+                session.add(Vacante(titulo=nuevo_titulo, departamento=depto_seleccionado, estado="Abierta"))
                 session.commit()
-                st.success(f"¡Puesto '{nuevo_titulo}' creado con éxito!")
+                st.success(f"¡Puesto '{nuevo_titulo}' creado con éxito en el área '{depto_seleccionado}'!")
                 st.rerun()
             except Exception as e:
                 session.rollback()
@@ -68,7 +80,6 @@ with tab3:
 # --- PESTAÑA 1: PANEL DE GESTIÓN RRHH ---
 with tab1:
     # --- CÁLCULO DE CONTADORES EN TIEMPO REAL ---
-    # Sumamos "Preocupacional" a las etapas activas para que sigan sumando en el contador de proceso
     etapas_activas = [
         "CV recibido", 
         "Entrevista Director Comercial", 
@@ -230,7 +241,7 @@ with tab1:
                     
                     st.write("---")
                     
-                    # --- FORMULARIO DE EDICIÓN CON PREOCUPACIONAL ---
+                    # --- FORMULARIO DE EDICIÓN ---
                     with st.form(key=f"form_update_{post.id}"):
                         estados = [
                             "CV recibido",
@@ -244,7 +255,6 @@ with tab1:
                             "Contratado"
                         ]
                         
-                        # Mapeo inteligente para evitar errores con estados viejos
                         estado_actual = post.estado_proceso
                         if estado_actual in ["Rechazado", "Perfil en Reserva"]:
                             estado_actual = "No Aplica"
