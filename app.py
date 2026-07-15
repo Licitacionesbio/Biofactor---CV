@@ -224,7 +224,7 @@ with tab1:
                 # --- CABECERA CON ÍCONO DE PERSONA (👤) ---
                 with st.expander(f"👤 {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
                     
-                    # --- VISTA LIMPIA: SOLO LECTURA ---
+                    # --- VISTA LIMPIA: DATOS DE CONTACTO ---
                     col_info_1, col_info_2 = st.columns([1, 1])
                     with col_info_1:
                         st.markdown(f"📧 **Email:** {cand.email}")
@@ -250,7 +250,9 @@ with tab1:
                                 )
                                 st.markdown(boton_html, unsafe_allow_html=True)
 
-                    st.markdown(f"📝 **Notas actuales:** {post.notes if post.notes else '*Sin notas*'}")
+                    # --- INFORMACIÓN DE SELECCIÓN (ESTADO Y NOTAS SIEMPRE VISIBLES) ---
+                    st.markdown(f"📈 **Estado de la Postulación:** `{post.estado_proceso}`")
+                    st.markdown(f"📝 **Notas / Comentarios Internos:** {post.notes if post.notes else '*Sin notas registradas*'}")
 
                     # Descarga del CV
                     if cand.archivo_cv:
@@ -268,7 +270,7 @@ with tab1:
                     st.write("---")
                     
                     # --- MODO EDICIÓN OCULTO POR DEFECTO ---
-                    editar_activo = st.checkbox("✏️ Editar datos del candidato", key=f"check_edit_{post.id}")
+                    editar_activo = st.checkbox("✏️ Editar datos / etapa del candidato", key=f"check_edit_{post.id}")
                     
                     if editar_activo:
                         with st.form(key=f"form_update_{post.id}"):
@@ -297,7 +299,7 @@ with tab1:
                             notes_actuales = post.notes if post.notes else ""
                             nuevas_notas = st.text_area("Notas / Comentarios Internos:", value=notes_actuales)
                             
-                            # --- FILA DE 3 BOTONES ALINEADOS ABAJO DE LAS NOTAS ---
+                            # --- FILA DE 3 BOTONES ALINEADOS ---
                             col_save, col_edit, col_del = st.columns([1, 1, 1])
                             
                             with col_save:
