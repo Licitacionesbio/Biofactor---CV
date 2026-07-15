@@ -68,8 +68,15 @@ with tab3:
 # --- PESTAÑA 1: PANEL DE GESTIÓN RRHH ---
 with tab1:
     # --- CÁLCULO DE CONTADORES EN TIEMPO REAL ---
-    # Agrupamos tus nuevas etapas en categorías lógicas para los contadores del menú izquierdo
-    etapas_activas = ["CV recibido", "Entrevista Director Comercial", "Entrevista RRHH", "Entrevista Presencial", "Aplica"]
+    # Sumamos "Entrevista con Gerencia" a la lista de etapas activas del proceso de selección
+    etapas_activas = [
+        "CV recibido", 
+        "Entrevista Director Comercial", 
+        "Entrevista RRHH", 
+        "Entrevista Presencial", 
+        "Entrevista con Gerencia",
+        "Aplica"
+    ]
     
     try:
         total_todos = session.query(Postulacion).count()
@@ -82,7 +89,6 @@ with tab1:
             Postulacion.estado_proceso == "Contratado"
         ).count()
         
-        # El contador de descartados/archivo ahora busca "No Aplica" y mantiene "Rechazado" por compatibilidad vieja
         total_no_aplica = session.query(Postulacion).filter(
             Postulacion.estado_proceso.in_(["No Aplica", "Rechazado", "Perfil en Reserva"])
         ).count()
@@ -223,20 +229,20 @@ with tab1:
                     
                     st.write("---")
                     
-                    # --- FORMULARIO DE EDICIÓN CON TUS NUEVAS ETAPAS EXACTAS ---
+                    # --- FORMULARIO DE EDICIÓN CON "ENTREVISTA CON GERENCIA" ---
                     with st.form(key=f"form_update_{post.id}"):
                         estados = [
                             "CV recibido",
                             "Entrevista Director Comercial",
                             "Entrevista RRHH",
                             "Entrevista Presencial",
+                            "Entrevista con Gerencia",
                             "Aplica",
                             "No Aplica",
                             "Contratado"
                         ]
                         
-                        # Mapeo inteligente: si hay un registro viejo ("Rechazado" o "CV Recibido" con mayúscula),
-                        # lo acomodamos a tu nueva lista para que Streamlit no tire error.
+                        # Mapeo inteligente para mantener la compatibilidad hacia atrás
                         estado_actual = post.estado_proceso
                         if estado_actual in ["Rechazado", "Perfil en Reserva"]:
                             estado_actual = "No Aplica"
@@ -331,7 +337,6 @@ with tab2:
                         if postulacion_existente:
                             st.warning(f"⚠️ Ya existe la postulación. Estado: '{postulacion_existente.estado_proceso}'.")
                         else:
-                            # Al registrar un CV nuevo, por defecto entra en tu etapa inicial exacta: "CV recibido"
                             session.add(Postulacion(
                                 candidato_id=candidato_id, 
                                 vacante_id=opciones_vacantes[puesto_sel], 
