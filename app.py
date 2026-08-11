@@ -5,65 +5,7 @@ from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
 
-# --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Biofactor", layout="wide")
-
-# --- INYECCIÓN DE ESTILOS CSS PERSONALIZADOS (FORZADO CON !important) ---
-st.markdown("""
-    <style>
-    /* Fondo principal de la app */
-    .stApp {
-        background-color: #f3f6f4 !important;
-    }
-    
-    /* Título principal con estilo de la marca */
-    h1 {
-        color: #0e4d25 !important;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
-        font-weight: 700 !important;
-    }
-    
-    /* Personalización de los desplegables / Expander de Candidatos */
-    div[data-testid="stExpander"] {
-        background-color: #ffffff !important;
-        border: 1px solid #dcdcdc !important;
-        border-left: 6px solid #1b7a3e !important; /* Borde verde característico */
-        border-radius: 10px !important;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
-        margin-bottom: 12px !important;
-    }
-    
-    /* Estilo del texto del encabezado del desplegable */
-    div[data-testid="stExpander"] details summary {
-        font-weight: 600 !important;
-        color: #1a1a1a !important;
-    }
-
-    /* Botones primarios y de interfaz */
-    .stButton>button {
-        border-radius: 8px !important;
-        font-weight: 600 !important;
-        transition: all 0.2s ease-in-out !important;
-    }
-    
-    .stButton>button:hover {
-        transform: translateY(-1px) !important;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.12) !important;
-    }
-    
-    /* Estilo para pestañas */
-    button[data-baseweb="tab"] {
-        font-size: 16px !important;
-        font-weight: 600 !important;
-    }
-    
-    /* Líneas separadoras más suaves */
-    hr {
-        margin: 1.5em 0 !important;
-        border-color: #e2e8f0 !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
 
 # --- CONEXIÓN OPTIMIZADA A NEON (NUBE) O LOCAL ---
 @st.cache_resource
@@ -75,6 +17,7 @@ def get_db_engine():
         elif DATABASE_URL.startswith("postgresql://"):
             DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
         
+        # Eliminamos el '-pooler' y parámetros de binding conflictivos para evitar el límite de conexiones de Neon
         DATABASE_URL = DATABASE_URL.replace("-pooler.", ".")
         DATABASE_URL = DATABASE_URL.replace("&channel_binding=require", "")
         
@@ -117,6 +60,7 @@ ETAPAS_PROCESO = [
     "Contratado"
 ]
 
+# Etapas que se consideran activas dentro del proceso de selección
 ETAPAS_ACTIVAS = [
     "CV Recibido",
     "Entrevista Director Comercial",
@@ -186,6 +130,7 @@ with tab3:
 
 # --- PESTAÑA 1: PANEL DE GESTIÓN RRHH ---
 with tab1:
+    # --- CÁLCULO DE CONTADORES EN TIEMPO REAL ---
     try:
         total_todos = session.query(Postulacion).count()
         
@@ -290,9 +235,10 @@ with tab1:
                 if busqueda.lower() not in texto_completo:
                     continue
                 
-                # --- DESPLEGABLE CON BORDE VERDE PERSONALIZADO ---
-                with st.expander(f"👤 {cand.nombre}  ➔  🎯 {vac.titulo} | [{post.estado_proceso}]"):
+                # --- CABECERA CON ÍCONO DE PERSONA (👤) ---
+                with st.expander(f"👤 {cand.nombre} -> 🎯 {vac.titulo} | [{post.estado_proceso}]"):
                     
+                    # --- 1. VISTA LIMPIA DE CONTACTO ---
                     col_info_1, col_info_2 = st.columns([1, 1])
                     with col_info_1:
                         st.markdown(f"📧 **Email:** {cand.email}")
@@ -331,6 +277,7 @@ with tab1:
 
                     st.write("---")
 
+                    # --- 2. GESTIÓN DIRECTA DE SELECCIÓN ---
                     with st.form(key=f"form_quick_update_{post.id}"):
                         st.markdown("### 📋 Seguimiento de Postulación")
                         
@@ -374,6 +321,7 @@ with tab1:
                                     session.rollback()
                                     st.error(f"No se pudo eliminar: {e}")
 
+                    # --- 3. MODAL OCULTO PARA CAMBIAR DATOS DE CONTACTO ---
                     editar_contacto = st.checkbox("⚙️ Editar datos de contacto (Nombre, Email, Teléfono, Dirección)", key=f"check_edit_contact_{post.id}")
                     
                     if editar_contacto:
