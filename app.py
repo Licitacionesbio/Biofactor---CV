@@ -523,7 +523,12 @@ with tab3:
     with st.form("form_crear_vacante"):
         nuevo_titulo = st.text_input("Nombre de la Vacante / Puesto:")
         depto_seleccionado = st.selectbox("Área:", [
-            "Area Comercial", "Area Tecnica", "Area Gerencial", "Area Contable", "Area Operativo"
+            "Area Comercial", 
+            "Area Comercio Exterior", 
+            "Area Tecnica", 
+            "Area Gerencial", 
+            "Area Contable", 
+            "Area Operativo"
         ])
 
         if st.form_submit_button("Crear Puesto") and nuevo_titulo:
