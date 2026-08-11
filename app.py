@@ -31,19 +31,12 @@ def get_db_engine():
             with engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
             return engine, True
-        except Exception as e:
-            st.error(f"🚨 Error al intentar conectar a Neon: {e}")
-            st.warning("Usando base temporal local SQLite para que la app no se apague.")
+        except Exception:
             return create_engine('sqlite:///bolsa_empleo.db'), False
     else:
         return create_engine('sqlite:///bolsa_empleo.db'), False
 
 engine, connection_successful = get_db_engine()
-
-if connection_successful:
-    st.success("🔌 ¡Conexión exitosa a la base de datos de Neon en la nube!")
-elif "database" not in st.secrets:
-    st.warning("⚠️ No se detectaron Secrets de base de datos en Streamlit. Usando base local SQLite.")
 
 Base.metadata.create_all(engine)
 
@@ -91,12 +84,19 @@ def obtener_link_whatsapp(telefono_str):
         
     return f"https://wa.me/{numeros}"
 
-# --- LOGO Y TÍTULO ---
-col_logo, col_titulo = st.columns([1, 20])
+# --- LOGO, TÍTULO Y ESTADO DE CONEXIÓN ---
+col_logo, col_titulo, col_estado = st.columns([1, 16, 4])
 with col_logo:
     st.image("logo.png", width=60) 
 with col_titulo:
     st.title("BIOFACTOR S.A. - Vacante y Postulantes") 
+with col_estado:
+    if connection_successful:
+        st.caption("🟢 **Base de datos:** Conectado (Neon Nube)")
+    elif "database" not in st.secrets:
+        st.caption("🟡 **Base de datos:** Local (SQLite)")
+    else:
+        st.caption("🔴 **Base de datos:** Desconectado (SQLite Local)")
 
 st.markdown("---")
 
