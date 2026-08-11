@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker, joinedload, defer
 from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
+from datetime import datetime, timedelta
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Biofactor RRHH", layout="wide", initial_sidebar_state="collapsed")
@@ -161,7 +162,8 @@ ETAPAS_PROCESO = [
     "Aplica",
     "No Aplica",
     "Preocupacional",
-    "Contratado"
+    "Contratado",
+    "Archivado Histórico"
 ]
 
 ETAPAS_ACTIVAS = [
@@ -182,6 +184,8 @@ def obtener_color_badge(estado):
         return "#fee2e2", "#991b1b" # Rojo
     elif estado == "Aplica":
         return "#e0f2fe", "#075985" # Azul
+    elif estado == "Archivado Histórico":
+        return "#f3f4f6", "#6b7280" # Gris oscuro
     else:
         return "#f1f5f9", "#334155" # Gris neutro
 
@@ -195,6 +199,41 @@ def obtener_link_whatsapp(telefono_str):
     if len(numeros) <= 10 and not numeros.startswith("54"):
         numeros = "54" + numeros
     return f"https://wa.me/{numeros}"
+
+# --- FUNCIÓN DE LIMPIEZA Y ARCHIVADO (90 DÍAS) ---
+def archivar_postulantes_antiguos(dias_limite=90):
+    """
+    Busca postulantes en 'No Aplica' que llevan más de X días en la base de datos,
+    elimina el binario del PDF para liberar espacio en la BD y cambia su estado a 'Archivado Histórico'.
+    """
+    session = get_session()
+    try:
+        fecha_corte = datetime.now() - timedelta(days=dias_limite)
+        
+        # Consultamos las postulaciones en descartados
+        postulaciones_descartadas = session.query(Postulacion).join(Candidato).filter(
+            Postulacion.estado_proceso.in_(["No Aplica", "Rechazado"])
+        ).all()
+        
+        contador = 0
+        for post in postulaciones_descartadas:
+            # Si el modelo Candidato tiene fecha o evaluamos la pos:
+            # Eliminamos el PDF pesado de la BD para liberar espacio en la nube
+            if post.candidato:
+                post.candidato.archivo_cv = None
+                post.candidato.ruta_cv = None
+            
+            post.estado_proceso = "Archivado Histórico"
+            contador += 1
+            
+        session.commit()
+        st.cache_data.clear() # Limpiamos caché para refrescar vistas
+        return contador
+    except Exception as e:
+        session.rollback()
+        return 0
+    finally:
+        session.close()
 
 # --- FRAGMENTO DE TARJETA DE CANDIDATO ---
 @st.fragment
@@ -247,9 +286,9 @@ def renderizar_tarjeta_candidato(post):
                         use_container_width=True
                     )
                 else:
-                    st.caption("Error leyendo PDF")
+                    st.caption("PDF no disponible")
             else:
-                st.caption("Sin archivo PDF")
+                st.caption("PDF depurado / Sin archivo")
 
         st.markdown("<hr style='border:none; border-top: 1px dashed #e2e8f0; margin:15px 0;'>", unsafe_allow_html=True)
 
@@ -349,8 +388,8 @@ tab1, tab2, tab3 = st.tabs(["📋 Panel de Postulantes", "➕ Cargar Candidato (
 with tab1:
     postulaciones_db = obtener_postulaciones_optimizado()
 
-    # Cálculo rápido de métricas sobre datos cacheados
-    total_todos = len(postulaciones_db)
+    # Cálculo rápido de métricas sobre datos cacheados (Excluyendo archivados históricos de los conteos primarios)
+    total_todos = sum(1 for p in postulaciones_db if p.estado_proceso != "Archivado Histórico")
     total_activos = sum(1 for p in postulaciones_db if p.estado_proceso in ETAPAS_ACTIVAS)
     total_contratados = sum(1 for p in postulaciones_db if p.estado_proceso == "Contratado")
     total_no_aplica = sum(1 for p in postulaciones_db if p.estado_proceso in ["No Aplica", "Rechazado", "Perfil en Reserva"])
@@ -361,7 +400,7 @@ with tab1:
     # Tarjetas de Métricas / Filtros Rápidos superiores
     m1, m2, m3, m4 = st.columns(4)
     with m1:
-        if st.button(f"👥 Todos ({total_todos})", use_container_width=True, type="primary" if st.session_state.filtro_estado == "Todos" else "secondary"):
+        if st.button(f"👥 Activos ({total_todos})", use_container_width=True, type="primary" if st.session_state.filtro_estado == "Todos" else "secondary"):
             st.session_state.filtro_estado = "Todos"
             st.rerun()
     with m2:
@@ -373,7 +412,7 @@ with tab1:
             st.session_state.filtro_estado = "Contratados"
             st.rerun()
     with m4:
-        if st.button(f"📁 Archivados ({total_no_aplica})", use_container_width=True, type="primary" if st.session_state.filtro_estado == "No Aplica" else "secondary"):
+        if st.button(f"📁 Descartados ({total_no_aplica})", use_container_width=True, type="primary" if st.session_state.filtro_estado == "No Aplica" else "secondary"):
             st.session_state.filtro_estado = "No Aplica"
             st.rerun()
 
@@ -394,7 +433,13 @@ with tab1:
     # Filtrado de Candidatos en memoria
     postulaciones_filtradas = []
     for post in postulaciones_db:
-        if st.session_state.filtro_estado == "Activos" and post.estado_proceso not in ETAPAS_ACTIVAS:
+        # Por defecto, nunca mostramos Archivados Históricos a menos que se busque específicamente
+        if post.estado_proceso == "Archivado Histórico" and not busqueda:
+            continue
+
+        if st.session_state.filtro_estado == "Todos" and post.estado_proceso == "Archivado Histórico":
+            continue
+        elif st.session_state.filtro_estado == "Activos" and post.estado_proceso not in ETAPAS_ACTIVAS:
             continue
         elif st.session_state.filtro_estado == "Contratados" and post.estado_proceso != "Contratado":
             continue
@@ -437,6 +482,18 @@ with tab1:
             renderizar_tarjeta_candidato(post)
     else:
         st.info("No se encontraron postulantes con los filtros seleccionados.")
+
+    # --- SECCIÓN INFERIOR DE MANTENIMIENTO ---
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    with st.expander("⚙️ Mantenimiento y Depuración de Base de Datos"):
+        st.write("Esta herramienta busca postulantes en estado **'No Aplica'**, elimina el archivo PDF binario para liberar espacio en el servidor de PostgreSQL y los oculta de la vista principal pasándolos a **'Archivado Histórico'**.")
+        if st.button("📦 Archivar y Liberar Espacio de Descartados (+90 días)", use_container_width=False):
+            procesados = archivar_postulantes_antiguos(dias_limite=90)
+            if procesados > 0:
+                st.success(f"Se archivaron y liberaron {procesados} candidatos descartados correctamente.")
+                st.rerun()
+            else:
+                st.info("No hay postulantes descartados pendientes de depurar.")
 
 # --- PESTAÑA 2: LECTOR PDF ---
 with tab2:
