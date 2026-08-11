@@ -5,7 +5,50 @@ from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
 
+# --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Biofactor", layout="wide")
+
+# --- INYECCIÓN DE ESTILOS CSS PERSONALIZADOS ---
+st.markdown("""
+    <style>
+    /* Fondo principal de la app */
+    .stApp {
+        background-color: #f8f9fa;
+    }
+    
+    /* Encabezado Principal */
+    .main-header {
+        background: linear-gradient(135deg, #0e4d25 0%, #1b7a3e 100%);
+        padding: 20px;
+        border-radius: 12px;
+        color: white;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    
+    /* Tarjetas de Candidatos (Cards) */
+    .candidate-card {
+        background-color: white;
+        border-radius: 10px;
+        padding: 20px;
+        border-left: 5px solid #1b7a3e;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        margin-bottom: 15px;
+    }
+    
+    /* Botones personalizados */
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # --- CONEXIÓN OPTIMIZADA A NEON (NUBE) O LOCAL ---
 @st.cache_resource
