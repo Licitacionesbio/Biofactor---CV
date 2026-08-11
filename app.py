@@ -160,7 +160,7 @@ header_col1, header_col2, header_col3 = st.columns([1, 8, 3])
 with header_col1:
     st.image("logo.png", width=55)
 with header_col2:
-    st.markdown("<h2 style='margin:0; padding-top:5px;'>Gestión de Talentos — Biofactor</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin:0; padding-top:5px;'>BIOFACTOR S.A. - Vacante y Postulantes</h2>", unsafe_allow_html=True)
 with header_col3:
     if connection_successful:
         st.markdown("<div style='text-align:right; color:#16a34a; font-size:13px; padding-top:12px;'>🟢 Nube Conectada</div>", unsafe_allow_html=True)
