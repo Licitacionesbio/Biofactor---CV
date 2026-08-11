@@ -1,6 +1,6 @@
 import streamlit as st
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, scoped_session
+from sqlalchemy.orm import sessionmaker, joinedload, defer
 from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
@@ -112,6 +112,45 @@ SessionFactory = get_session_factory(engine)
 def get_session():
     return SessionFactory()
 
+# --- CONSULTAS CACHEADAS ---
+@st.cache_data(ttl=60)
+def obtener_postulaciones_optimizado():
+    """Trae las postulaciones con JOINs optimizados y defer para excluir los archivos PDF pesados."""
+    session = SessionFactory()
+    try:
+        results = session.query(Postulacion)\
+            .options(
+                joinedload(Postulacion.candidato).defer(Candidato.archivo_cv),
+                joinedload(Postulacion.vacante)
+            ).all()
+        session.expunge_all() # Desconecta de la sesión para ser mutable en cache
+        return results
+    except Exception:
+        return []
+    finally:
+        session.close()
+
+@st.cache_data(ttl=60)
+def obtener_vacantes_cached():
+    session = SessionFactory()
+    try:
+        results = session.query(Vacante).all()
+        session.expunge_all()
+        return results
+    except Exception:
+        return []
+    finally:
+        session.close()
+
+def descargar_cv_por_id(candidato_id):
+    """Consulta rápida en base de datos únicamente cuando el usuario pide descargar el PDF."""
+    session = SessionFactory()
+    try:
+        cand = session.query(Candidato).filter(Candidato.id == candidato_id).first()
+        return cand.archivo_cv if cand else None
+    finally:
+        session.close()
+
 # --- ETAPAS DEL PROCESO ---
 ETAPAS_PROCESO = [
     "CV Recibido",
@@ -157,6 +196,139 @@ def obtener_link_whatsapp(telefono_str):
         numeros = "54" + numeros
     return f"https://wa.me/{numeros}"
 
+# --- FRAGMENTO DE TARJETA DE CANDIDATO ---
+@st.fragment
+def renderizar_tarjeta_candidato(post):
+    """Aisla la interacción de cada tarjeta para evitar recargar toda la interfaz de usuario."""
+    cand = post.candidato
+    vac = post.vacante
+    
+    bg_badge, fg_badge = obtener_color_badge(post.estado_proceso)
+    label_expander = f"{cand.nombre}  —  {vac.titulo}"
+    
+    with st.expander(label_expander):
+        col_c1, col_c2 = st.columns([3, 1])
+        with col_c1:
+            st.markdown(
+                f"<span style='background-color:{bg_badge}; color:{fg_badge}; font-weight:600; padding:4px 12px; border-radius:12px; font-size:13px;'>"
+                f"Etapa: {post.estado_proceso}"
+                f"</span>", 
+                unsafe_allow_html=True
+            )
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        info_col1, info_col2, info_col3 = st.columns([2, 2, 1.5])
+        
+        with info_col1:
+            st.caption("DATOS DE CONTACTO")
+            st.write(f"📧 **Email:** {cand.email}")
+            st.write(f"📍 **Ubicación:** {cand.direccion if cand.direccion else 'No especificada'}")
+        
+        with info_col2:
+            st.caption("TELÉFONO Y ACCIÓN")
+            st.write(f"📞 {cand.telefono if cand.telefono else 'No registrado'}")
+            link_wa = obtener_link_whatsapp(cand.telefono)
+            if link_wa:
+                st.markdown(f"[💬 Abrir Chat de WhatsApp]({link_wa})")
+
+        with info_col3:
+            st.caption("CURRÍCULUM")
+            # Carga diferida bajo demanda del binario PDF
+            if cand.ruta_cv:
+                archivo_bytes = descargar_cv_por_id(cand.id)
+                if archivo_bytes:
+                    st.download_button(
+                        label="📄 Descargar CV",
+                        data=archivo_bytes,
+                        file_name=f"CV_{cand.nombre.replace(' ', '_')}.pdf",
+                        mime="application/pdf",
+                        key=f"dl_{cand.id}_{post.id}",
+                        use_container_width=True
+                    )
+                else:
+                    st.caption("Error leyendo PDF")
+            else:
+                st.caption("Sin archivo PDF")
+
+        st.markdown("<hr style='border:none; border-top: 1px dashed #e2e8f0; margin:15px 0;'>", unsafe_allow_html=True)
+
+        # Formulario de Actualización Rápida
+        with st.form(key=f"form_quick_update_{post.id}"):
+            st.caption("ACTUALIZAR PROCESO DE SELECCIÓN")
+            
+            estado_actual = post.estado_proceso
+            if estado_actual == "CV recibido": estado_actual = "CV Recibido"
+            elif estado_actual in ["Rechazado", "Perfil en Reserva"]: estado_actual = "No Aplica"
+            elif estado_actual in ["Entrevista con Gerencia", "Entrevista con gerencia"]: estado_actual = "Entrevista Gerencia"
+            
+            idx_actual = ETAPAS_PROCESO.index(estado_actual) if estado_actual in ETAPAS_PROCESO else 0
+            
+            col_sel, col_notes = st.columns([1, 2])
+            with col_sel:
+                nuevo_est = st.selectbox("Cambiar Etapa:", ETAPAS_PROCESO, index=idx_actual, key=f"sel_{post.id}")
+            with col_notes:
+                nuevas_notas = st.text_input("Notas de entrevista / comentarios:", value=post.notes if post.notes else "", key=f"notes_{post.id}")
+
+            btn1, btn2 = st.columns([3, 1])
+            with btn1:
+                if st.form_submit_button("Guardar Cambios", use_container_width=True):
+                    session = SessionFactory()
+                    try:
+                        p = session.query(Postulacion).get(post.id)
+                        p.estado_proceso = nuevo_est
+                        p.notes = nuevas_notas
+                        session.commit()
+                        st.cache_data.clear() # Invalida la caché de búsquedas
+                        st.success("Guardado correctamente.")
+                        st.rerun()
+                    except Exception as e:
+                        session.rollback()
+                        st.error(f"Error: {e}")
+                    finally:
+                        session.close()
+
+            with btn2:
+                if st.form_submit_button("🗑️ Eliminar", use_container_width=True):
+                    session = SessionFactory()
+                    try:
+                        p = session.query(Postulacion).get(post.id)
+                        session.delete(p)
+                        session.commit()
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as e:
+                        session.rollback()
+                        st.error(f"Error: {e}")
+                    finally:
+                        session.close()
+
+        # Edición de Contacto Plegable
+        with st.popover("✏️ Editar datos de contacto"):
+            with st.form(key=f"form_contact_{post.id}"):
+                nuevo_nombre = st.text_input("Nombre Completo:", value=cand.nombre)
+                nuevo_email = st.text_input("Email:", value=cand.email)
+                nuevo_telefono = st.text_input("Teléfono:", value=cand.telefono if cand.telefono else "")
+                nueva_direccion = st.text_input("Dirección:", value=cand.direccion if cand.direccion else "")
+                
+                if st.form_submit_button("Actualizar Contacto", use_container_width=True):
+                    session = SessionFactory()
+                    try:
+                        c = session.query(Candidato).get(cand.id)
+                        c.nombre = nuevo_nombre
+                        c.email = nuevo_email
+                        c.telefono = nuevo_telefono
+                        c.direccion = nueva_direccion
+                        session.commit()
+                        st.cache_data.clear()
+                        st.success("Contacto actualizado.")
+                        st.rerun()
+                    except Exception as e:
+                        session.rollback()
+                        st.error(f"Error: {e}")
+                    finally:
+                        session.close()
+
 # --- ENCABEZADO ---
 header_col1, header_col2, header_col3 = st.columns([1, 8, 3])
 with header_col1:
@@ -175,16 +347,13 @@ tab1, tab2, tab3 = st.tabs(["📋 Panel de Postulantes", "➕ Cargar Candidato (
 
 # --- PESTAÑA 1: PANEL RRHH ---
 with tab1:
-    session = get_session()
-    try:
-        total_todos = session.query(Postulacion).count()
-        total_activos = session.query(Postulacion).filter(Postulacion.estado_proceso.in_(ETAPAS_ACTIVAS)).count()
-        total_contratados = session.query(Postulacion).filter(Postulacion.estado_proceso == "Contratado").count()
-        total_no_aplica = session.query(Postulacion).filter(Postulacion.estado_proceso.in_(["No Aplica", "Rechazado", "Perfil en Reserva"])).count()
-    except Exception:
-        total_todos = total_activos = total_contratados = total_no_aplica = 0
-    finally:
-        session.close()
+    postulaciones_db = obtener_postulaciones_optimizado()
+
+    # Cálculo rápido de métricas sobre datos cacheados
+    total_todos = len(postulaciones_db)
+    total_activos = sum(1 for p in postulaciones_db if p.estado_proceso in ETAPAS_ACTIVAS)
+    total_contratados = sum(1 for p in postulaciones_db if p.estado_proceso == "Contratado")
+    total_no_aplica = sum(1 for p in postulaciones_db if p.estado_proceso in ["No Aplica", "Rechazado", "Perfil en Reserva"])
 
     if "filtro_estado" not in st.session_state:
         st.session_state.filtro_estado = "Todos"
@@ -211,14 +380,7 @@ with tab1:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Filtros de Puesto y Búsqueda
-    session = get_session()
-    try:
-        vacantes_db = session.query(Vacante).all()
-    except Exception:
-        vacantes_db = []
-    finally:
-        session.close()
-        
+    vacantes_db = obtener_vacantes_cached()
     opciones_puestos = ["Todos los Puestos"] + [v.titulo for v in vacantes_db]
 
     f_col1, f_col2 = st.columns([1, 1])
@@ -229,15 +391,8 @@ with tab1:
 
     st.markdown("<hr style='border:none; border-top: 1px solid #e2e8f0; margin: 20px 0;'>", unsafe_allow_html=True)
 
-    session = get_session()
-    try:
-        postulaciones_db = session.query(Postulacion).all()
-    except Exception as e:
-        st.error(f"Error consultando base de datos: {e}")
-        postulaciones_db = []
-
-    candidatos_mostrados = 0
-
+    # Filtrado de Candidatos en memoria
+    postulaciones_filtradas = []
     for post in postulaciones_db:
         if st.session_state.filtro_estado == "Activos" and post.estado_proceso not in ETAPAS_ACTIVAS:
             continue
@@ -246,8 +401,8 @@ with tab1:
         elif st.session_state.filtro_estado == "No Aplica" and post.estado_proceso not in ["No Aplica", "Rechazado", "Perfil en Reserva"]:
             continue
 
-        cand = session.query(Candidato).filter(Candidato.id == post.candidato_id).first()
-        vac = session.query(Vacante).filter(Vacante.id == post.vacante_id).first()
+        cand = post.candidato
+        vac = post.vacante
 
         if cand and vac:
             if puesto_seleccionado != "Todos los Puestos" and vac.titulo != puesto_seleccionado:
@@ -259,129 +414,34 @@ with tab1:
             if busqueda and busqueda.lower() not in texto_completo:
                 continue
 
-            candidatos_mostrados += 1
-            
-            bg_badge, fg_badge = obtener_color_badge(post.estado_proceso)
-            
-            label_expander = f"{cand.nombre}  —  {vac.titulo}"
-            
-            with st.expander(label_expander):
-                col_c1, col_c2 = st.columns([3, 1])
-                with col_c1:
-                    st.markdown(
-                        f"<span style='background-color:{bg_badge}; color:{fg_badge}; font-weight:600; padding:4px 12px; border-radius:12px; font-size:13px;'>"
-                        f"Etapa: {post.estado_proceso}"
-                        f"</span>", 
-                        unsafe_allow_html=True
-                    )
-                
-                st.markdown("<br>", unsafe_allow_html=True)
+            postulaciones_filtradas.append(post)
 
-                info_col1, info_col2, info_col3 = st.columns([2, 2, 1.5])
-                
-                with info_col1:
-                    st.caption("DATOS DE CONTACTO")
-                    st.write(f"📧 **Email:** {cand.email}")
-                    st.write(f"📍 **Ubicación:** {cand.direccion if cand.direccion else 'No especificada'}")
-                
-                with info_col2:
-                    st.caption("TELÉFONO Y ACCIÓN")
-                    st.write(f"📞 {cand.telefono if cand.telefono else 'No registrado'}")
-                    link_wa = obtener_link_whatsapp(cand.telefono)
-                    if link_wa:
-                        st.markdown(f"[💬 Abrir Chat de WhatsApp]({link_wa})")
+    # Paginador simple para acelerar la vista del DOM
+    POSTULANTES_POR_PAGINA = 15
+    total_postulantes = len(postulaciones_filtradas)
 
-                with info_col3:
-                    st.caption("CURRÍCULUM")
-                    if cand.archivo_cv:
-                        st.download_button(
-                            label="📄 Descargar CV",
-                            data=cand.archivo_cv,
-                            file_name=f"CV_{cand.nombre.replace(' ', '_')}.pdf",
-                            mime="application/pdf",
-                            key=f"dl_{cand.id}_{post.id}",
-                            use_container_width=True
-                        )
-                    else:
-                        st.caption("Sin archivo PDF")
+    if total_postulantes > 0:
+        if total_postulantes > POSTULANTES_POR_PAGINA:
+            total_paginas = max(1, (total_postulantes + POSTULANTES_POR_PAGINA - 1) // POSTULANTES_POR_PAGINA)
+            col_pag1, col_pag2 = st.columns([3, 1])
+            with col_pag2:
+                pagina_actual = st.number_input("Página:", min_value=1, max_value=total_paginas, step=1, value=1)
+            inicio = (pagina_actual - 1) * POSTULANTES_POR_PAGINA
+            fin = inicio + POSTULANTES_POR_PAGINA
+            postulaciones_pagina = postulaciones_filtradas[inicio:fin]
+        else:
+            postulaciones_pagina = postulaciones_filtradas
 
-                st.markdown("<hr style='border:none; border-top: 1px dashed #e2e8f0; margin:15px 0;'>", unsafe_allow_html=True)
-
-                # Formulario de Actualización
-                with st.form(key=f"form_quick_update_{post.id}"):
-                    st.caption("ACTUALIZAR PROCESO DE SELECCIÓN")
-                    
-                    estado_actual = post.estado_proceso
-                    if estado_actual == "CV recibido": estado_actual = "CV Recibido"
-                    elif estado_actual in ["Rechazado", "Perfil en Reserva"]: estado_actual = "No Aplica"
-                    elif estado_actual in ["Entrevista con Gerencia", "Entrevista con gerencia"]: estado_actual = "Entrevista Gerencia"
-                    
-                    idx_actual = ETAPAS_PROCESO.index(estado_actual) if estado_actual in ETAPAS_PROCESO else 0
-                    
-                    col_sel, col_notes = st.columns([1, 2])
-                    with col_sel:
-                        nuevo_est = st.selectbox("Cambiar Etapa:", ETAPAS_PROCESO, index=idx_actual, key=f"sel_{post.id}")
-                    with col_notes:
-                        nuevas_notas = st.text_input("Notas de entrevista / comentarios:", value=post.notes if post.notes else "", key=f"notes_{post.id}")
-
-                    btn1, btn2 = st.columns([3, 1])
-                    with btn1:
-                        if st.form_submit_button("Guardar Cambios", use_container_width=True):
-                            try:
-                                post.estado_proceso = nuevo_est
-                                post.notes = nuevas_notas
-                                session.commit()
-                                st.success("Guardado correctamente.")
-                                st.rerun()
-                            except Exception as e:
-                                session.rollback()
-                                st.error(f"Error: {e}")
-                    with btn2:
-                        if st.form_submit_button("🗑️ Eliminar", use_container_width=True):
-                            try:
-                                session.delete(post)
-                                session.commit()
-                                st.rerun()
-                            except Exception as e:
-                                session.rollback()
-                                st.error(f"Error: {e}")
-
-                # Edición de Contacto Plegable
-                with st.popover("✏️ Editar datos de contacto"):
-                    with st.form(key=f"form_contact_{post.id}"):
-                        nuevo_nombre = st.text_input("Nombre Completo:", value=cand.nombre)
-                        nuevo_email = st.text_input("Email:", value=cand.email)
-                        nuevo_telefono = st.text_input("Teléfono:", value=cand.telefono if cand.telefono else "")
-                        nueva_direccion = st.text_input("Dirección:", value=cand.direccion if cand.direccion else "")
-                        
-                        if st.form_submit_button("Actualizar Contacto", use_container_width=True):
-                            try:
-                                cand.nombre = nuevo_nombre
-                                cand.email = nuevo_email
-                                cand.telefono = nuevo_telefono
-                                cand.direccion = nueva_direccion
-                                session.commit()
-                                st.success("Contacto actualizado.")
-                                st.rerun()
-                            except Exception as e:
-                                session.rollback()
-                                st.error(f"Error: {e}")
-
-    if candidatos_mostrados == 0:
+        # Renderizado optimizado
+        for post in postulaciones_pagina:
+            renderizar_tarjeta_candidato(post)
+    else:
         st.info("No se encontraron postulantes con los filtros seleccionados.")
-    
-    session.close()
 
 # --- PESTAÑA 2: LECTOR PDF ---
 with tab2:
     st.subheader("Cargar Nuevo Postulante")
-    session = get_session()
-    try:
-        lista_vacantes = session.query(Vacante).all()
-    except Exception:
-        lista_vacantes = []
-    finally:
-        session.close()
+    lista_vacantes = obtener_vacantes_cached()
 
     if not lista_vacantes:
         st.warning("⚠️ Primero debes crear al menos un puesto laboral.")
@@ -446,6 +506,7 @@ with tab2:
                                     notes="CV registrado en el sistema."
                                 ))
                                 session_pdf.commit()
+                                st.cache_data.clear() # Limpia la caché al crear un nuevo candidato
                                 st.success(f"¡{nom} registrado con éxito!")
                                 st.rerun()
                         except Exception as e:
@@ -470,6 +531,7 @@ with tab3:
             try:
                 session_v.add(Vacante(titulo=nuevo_titulo, departamento=depto_seleccionado, estado="Abierta"))
                 session_v.commit()
+                st.cache_data.clear() # Limpia la caché al agregar puesto
                 st.success(f"Puesto '{nuevo_titulo}' creado con éxito.")
                 st.rerun()
             except Exception as e:
