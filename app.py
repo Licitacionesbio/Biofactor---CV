@@ -1,6 +1,6 @@
 import streamlit as st
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, scoped_session
 from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
@@ -108,7 +108,9 @@ def get_session_factory(_engine):
     return sessionmaker(bind=_engine)
 
 SessionFactory = get_session_factory(engine)
-session = SessionFactory()
+
+def get_session():
+    return SessionFactory()
 
 # --- ETAPAS DEL PROCESO ---
 ETAPAS_PROCESO = [
@@ -160,7 +162,7 @@ header_col1, header_col2, header_col3 = st.columns([1, 8, 3])
 with header_col1:
     st.image("logo.png", width=55)
 with header_col2:
-    st.markdown("<h2 style='margin:0; padding-top:5px;'>BIOFACTOR S.A. - Vacante y Postulantes</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='margin:0; padding-top:5px;'>Gestión de Talentos — Biofactor</h2>", unsafe_allow_html=True)
 with header_col3:
     if connection_successful:
         st.markdown("<div style='text-align:right; color:#16a34a; font-size:13px; padding-top:12px;'>🟢 Nube Conectada</div>", unsafe_allow_html=True)
@@ -173,6 +175,7 @@ tab1, tab2, tab3 = st.tabs(["📋 Panel de Postulantes", "➕ Cargar Candidato (
 
 # --- PESTAÑA 1: PANEL RRHH ---
 with tab1:
+    session = get_session()
     try:
         total_todos = session.query(Postulacion).count()
         total_activos = session.query(Postulacion).filter(Postulacion.estado_proceso.in_(ETAPAS_ACTIVAS)).count()
@@ -180,6 +183,8 @@ with tab1:
         total_no_aplica = session.query(Postulacion).filter(Postulacion.estado_proceso.in_(["No Aplica", "Rechazado", "Perfil en Reserva"])).count()
     except Exception:
         total_todos = total_activos = total_contratados = total_no_aplica = 0
+    finally:
+        session.close()
 
     if "filtro_estado" not in st.session_state:
         st.session_state.filtro_estado = "Todos"
@@ -206,10 +211,14 @@ with tab1:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Filtros de Puesto y Búsqueda
+    session = get_session()
     try:
         vacantes_db = session.query(Vacante).all()
     except Exception:
         vacantes_db = []
+    finally:
+        session.close()
+        
     opciones_puestos = ["Todos los Puestos"] + [v.titulo for v in vacantes_db]
 
     f_col1, f_col2 = st.columns([1, 1])
@@ -220,6 +229,7 @@ with tab1:
 
     st.markdown("<hr style='border:none; border-top: 1px solid #e2e8f0; margin: 20px 0;'>", unsafe_allow_html=True)
 
+    session = get_session()
     try:
         postulaciones_db = session.query(Postulacion).all()
     except Exception as e:
@@ -253,11 +263,9 @@ with tab1:
             
             bg_badge, fg_badge = obtener_color_badge(post.estado_proceso)
             
-            # Título limpio del expander
             label_expander = f"{cand.nombre}  —  {vac.titulo}"
             
             with st.expander(label_expander):
-                # Header interno con Badge de Estado
                 col_c1, col_c2 = st.columns([3, 1])
                 with col_c1:
                     st.markdown(
@@ -269,7 +277,6 @@ with tab1:
                 
                 st.markdown("<br>", unsafe_allow_html=True)
 
-                # Datos de Contacto
                 info_col1, info_col2, info_col3 = st.columns([2, 2, 1.5])
                 
                 with info_col1:
@@ -362,14 +369,19 @@ with tab1:
 
     if candidatos_mostrados == 0:
         st.info("No se encontraron postulantes con los filtros seleccionados.")
+    
+    session.close()
 
 # --- PESTAÑA 2: LECTOR PDF ---
 with tab2:
     st.subheader("Cargar Nuevo Postulante")
+    session = get_session()
     try:
         lista_vacantes = session.query(Vacante).all()
     except Exception:
         lista_vacantes = []
+    finally:
+        session.close()
 
     if not lista_vacantes:
         st.warning("⚠️ Primero debes crear al menos un puesto laboral.")
@@ -399,41 +411,48 @@ with tab2:
                     direccion = st.text_input("Dirección / Localidad:", value=dir_sug)
 
                     if st.form_submit_button("Guardar Postulante", use_container_width=True) and nom and email:
-                        candidato_existente = session.query(Candidato).filter(Candidato.email == email).first()
+                        session_pdf = get_session()
+                        try:
+                            candidato_existente = session_pdf.query(Candidato).filter(Candidato.email == email).first()
 
-                        if candidato_existente:
-                            candidato_existente.nombre = nom
-                            candidato_existente.telefono = telef
-                            candidato_existente.direccion = direccion
-                            candidato_existente.archivo_cv = bytes_pdf
-                            candidato_existente.ruta_cv = archivo.name
-                            candidato_id = candidato_existente.id
-                        else:
-                            nuevo_c = Candidato(
-                                nombre=nom, email=email, telefono=telef, direccion=direccion,
-                                archivo_cv=bytes_pdf, ruta_cv=archivo.name
-                            )
-                            session.add(nuevo_c)
-                            session.flush()
-                            candidato_id = nuevo_c.id
+                            if candidato_existente:
+                                candidato_existente.nombre = nom
+                                candidato_existente.telefono = telef
+                                candidato_existente.direccion = direccion
+                                candidato_existente.archivo_cv = bytes_pdf
+                                candidato_existente.ruta_cv = archivo.name
+                                candidato_id = candidato_existente.id
+                            else:
+                                nuevo_c = Candidato(
+                                    nombre=nom, email=email, telefono=telef, direccion=direccion,
+                                    archivo_cv=bytes_pdf, ruta_cv=archivo.name
+                                )
+                                session_pdf.add(nuevo_c)
+                                session_pdf.flush()
+                                candidato_id = nuevo_c.id
 
-                        postulacion_existente = session.query(Postulacion).filter(
-                            Postulacion.candidato_id == candidato_id,
-                            Postulacion.vacante_id == opciones_vacantes[puesto_sel]
-                        ).first()
+                            postulacion_existente = session_pdf.query(Postulacion).filter(
+                                Postulacion.candidato_id == candidato_id,
+                                Postulacion.vacante_id == opciones_vacantes[puesto_sel]
+                            ).first()
 
-                        if postulacion_existente:
-                            st.warning(f"Este candidato ya está registrado en este puesto ({postulacion_existente.estado_proceso}).")
-                        else:
-                            session.add(Postulacion(
-                                candidato_id=candidato_id,
-                                vacante_id=opciones_vacantes[puesto_sel],
-                                estado_proceso="CV Recibido",
-                                notes="CV registrado en el sistema."
-                            ))
-                            session.commit()
-                            st.success(f"¡{nom} registrado con éxito!")
-                            st.rerun()
+                            if postulacion_existente:
+                                st.warning(f"Este candidato ya está registrado en este puesto ({postulacion_existente.estado_proceso}).")
+                            else:
+                                session_pdf.add(Postulacion(
+                                    candidato_id=candidato_id,
+                                    vacante_id=opciones_vacantes[puesto_sel],
+                                    estado_proceso="CV Recibido",
+                                    notes="CV registrado en el sistema."
+                                ))
+                                session_pdf.commit()
+                                st.success(f"¡{nom} registrado con éxito!")
+                                st.rerun()
+                        except Exception as e:
+                            session_pdf.rollback()
+                            st.error(f"Error guardando postulante: {e}")
+                        finally:
+                            session_pdf.close()
             except Exception as e:
                 st.error(f"Error al procesar el documento PDF: {e}")
 
@@ -447,13 +466,14 @@ with tab3:
         ])
 
         if st.form_submit_button("Crear Puesto") and nuevo_titulo:
+            session_v = get_session()
             try:
-                session.add(Vacante(titulo=nuevo_titulo, departamento=depto_seleccionado, estado="Abierta"))
-                session.commit()
+                session_v.add(Vacante(titulo=nuevo_titulo, departamento=depto_seleccionado, estado="Abierta"))
+                session_v.commit()
                 st.success(f"Puesto '{nuevo_titulo}' creado con éxito.")
                 st.rerun()
             except Exception as e:
-                session.rollback()
+                session_v.rollback()
                 st.error(f"Error al guardar: {e}")
-
-session.close()
+            finally:
+                session_v.close()
