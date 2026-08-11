@@ -7,35 +7,52 @@ import re
 
 st.set_page_config(page_title="Biofactor", layout="wide")
 
-# --- CONEXIÓN INTELIGENTE A NEON (NUBE) O LOCAL ---
-connection_successful = False
+# --- CONEXIÓN OPTIMIZADA A NEON (NUBE) O LOCAL ---
+@st.cache_resource
+def get_db_engine():
+    if "database" in st.secrets:
+        DATABASE_URL = st.secrets["database"]["url"]
+        if DATABASE_URL.startswith("postgres://"):
+            DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
+        elif DATABASE_URL.startswith("postgresql://"):
+            DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
+        
+        # Eliminamos el '-pooler' y parámetros de binding conflictivos para evitar el límite de conexiones de Neon
+        DATABASE_URL = DATABASE_URL.replace("-pooler.", ".")
+        DATABASE_URL = DATABASE_URL.replace("&channel_binding=require", "")
+        
+        try:
+            engine = create_engine(
+                DATABASE_URL, 
+                connect_args={"sslmode": "require", "connect_timeout": 5},
+                pool_pre_ping=True,
+                pool_recycle=300
+            )
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return engine, True
+        except Exception as e:
+            st.error(f"🚨 Error al intentar conectar a Neon: {e}")
+            st.warning("Usando base temporal local SQLite para que la app no se apague.")
+            return create_engine('sqlite:///bolsa_empleo.db'), False
+    else:
+        return create_engine('sqlite:///bolsa_empleo.db'), False
 
-if "database" in st.secrets:
-    DATABASE_URL = st.secrets["database"]["url"]
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg2://", 1)
-    elif DATABASE_URL.startswith("postgresql://"):
-        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
-    
-    try:
-        engine = create_engine(DATABASE_URL, connect_args={"sslmode": "require"})
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        st.success("🔌 ¡Conexión exitosa a la base de datos de Neon en la nube!")
-        connection_successful = True
-    except Exception as e:
-        st.error(f"🚨 Error al intentar conectar a Neon: {e}")
-        st.warning("Usando base temporal local SQLite para que la app no se apague.")
-        DATABASE_URL = 'sqlite:///bolsa_empleo.db'
-        engine = create_engine(DATABASE_URL)
-else:
+engine, connection_successful = get_db_engine()
+
+if connection_successful:
+    st.success("🔌 ¡Conexión exitosa a la base de datos de Neon en la nube!")
+elif "database" not in st.secrets:
     st.warning("⚠️ No se detectaron Secrets de base de datos en Streamlit. Usando base local SQLite.")
-    DATABASE_URL = 'sqlite:///bolsa_empleo.db'
-    engine = create_engine(DATABASE_URL)
 
 Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
-session = Session()
+
+@st.cache_resource
+def get_session_factory(_engine):
+    return sessionmaker(bind=_engine)
+
+SessionFactory = get_session_factory(engine)
+session = SessionFactory()
 
 # --- DEFINICIÓN DE ETAPAS OFICIALES EN ORDEN ---
 ETAPAS_PROCESO = [
@@ -65,12 +82,10 @@ ETAPAS_ACTIVAS = [
 def obtener_link_whatsapp(telefono_str):
     if not telefono_str:
         return None
-    # Nos quedamos únicamente con los dígitos numéricos
     numeros = re.sub(r'\D', '', telefono_str)
     if not numeros:
         return None
     
-    # Si el número no tiene código de país (ej: empieza con 11 o 341 en Argentina), le agregamos el '54' de Argentina por defecto
     if len(numeros) <= 10 and not numeros.startswith("54"):
         numeros = "54" + numeros
         
@@ -197,7 +212,6 @@ with tab1:
             postulaciones_db = []
 
         for post in postulaciones_db:
-            # --- FILTRADO DINÁMICO POR EL BOTÓN SELECCIONADO A LA IZQUIERDA ---
             if st.session_state.filtro_estado == "Activos":
                 if post.estado_proceso not in ETAPAS_ACTIVAS:
                     continue
@@ -230,7 +244,6 @@ with tab1:
                         st.markdown(f"📧 **Email:** {cand.email}")
                         st.markdown(f"📍 **Ubicación:** {cand.direccion if cand.direccion else 'No especificada'}")
                     with col_info_2:
-                        # Teléfono con acceso a WhatsApp
                         link_wa = obtener_link_whatsapp(cand.telefono)
                         col_sub_tel, col_sub_wa = st.columns([1.2, 1])
                         with col_sub_tel:
@@ -264,12 +277,11 @@ with tab1:
 
                     st.write("---")
 
-                    # --- 2. GESTIÓN DIRECTA DE SELECCIÓN (ESTADO Y NOTAS SIEMPRE EDITABLES) ---
+                    # --- 2. GESTIÓN DIRECTA DE SELECCIÓN ---
                     with st.form(key=f"form_quick_update_{post.id}"):
                         st.markdown("### 📋 Seguimiento de Postulación")
                         
                         estado_actual = post.estado_proceso
-                        # Normalizar textos viejos de la base de datos
                         if estado_actual == "CV recibido":
                             estado_actual = "CV Recibido"
                         elif estado_actual in ["Rechazado", "Perfil en Reserva"]:
@@ -286,7 +298,6 @@ with tab1:
                         notes_actuales = post.notes if post.notes else ""
                         nuevas_notas = st.text_area("Notas / Comentarios Internos:", value=notes_actuales, key=f"notes_{post.id}")
                         
-                        # Botones para guardar estado/notas o eliminar postulación
                         col_save_quick, col_del_quick = st.columns([3, 1])
                         with col_save_quick:
                             if st.form_submit_button("💾 Guardar Estado y Notas", use_container_width=True):
@@ -310,7 +321,7 @@ with tab1:
                                     session.rollback()
                                     st.error(f"No se pudo eliminar: {e}")
 
-                    # --- 3. MODAL OCULTO SÓLO PARA CAMBIAR DATOS DE CONTACTO ---
+                    # --- 3. MODAL OCULTO PARA CAMBIAR DATOS DE CONTACTO ---
                     editar_contacto = st.checkbox("⚙️ Editar datos de contacto (Nombre, Email, Teléfono, Dirección)", key=f"check_edit_contact_{post.id}")
                     
                     if editar_contacto:
