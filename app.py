@@ -349,19 +349,22 @@ def renderizar_tarjeta_candidato(post):
                         if estado_anterior != nuevo_est or nuevas_notas != post.notes:
                             asunto_mail = f"🔄 Cambio de Estado: {cand.nombre} — {vac.titulo}"
                             cuerpo_mail = f"""
-                            Hola,
+Hola,
 
-                            Se ha actualizado el estado de un postulante en la plataforma:
+Se ha actualizado el estado de un postulante en la plataforma:
 
-                            • Candidato: {cand.nombre}
-                            • Puesto: {vac.titulo}
-                            • Estado Anterior: {estado_anterior}
-                            • Nuevo Estado: {nuevo_est}
-                            • Notas / Comentarios: {nuevas_notas if nuevas_notas else 'Sin notas'}
+  • Candidato: {cand.nombre}
+  • Puesto: {vac.titulo}
+  • Estado Anterior: {estado_anterior}
+  • Nuevo Estado: {nuevo_est}
+  • Notas / Comentarios: {nuevas_notas if nuevas_notas else 'Sin notas'}
 
-                            --
-                            Sistema de Gestión de Talentos - Biofactor
-                            """
+🔗 Puedes ingresar a la plataforma para dar seguimiento aquí:
+https://biofactor-rrhh.streamlit.app
+
+--
+Sistema de Gestión de Talentos - Biofactor
+"""
                             enviar_notificacion_email(asunto_mail, cuerpo_mail)
 
                         st.success("Guardado correctamente.")
@@ -610,20 +613,21 @@ with tab2:
                                 # ✉️ ENVÍO DE CORREO AUTOMÁTICO AL REGISTRAR NUEVO CV
                                 asunto_nuevo = f"📄 Nuevo CV Cargado: {nom} — {puesto_sel}"
                                 cuerpo_nuevo = f"""
-                                Hola,
+Hola,
 
-                                Se ha cargado un nuevo currículum en la plataforma de selección:
+Se ha cargado un nuevo currículum en la plataforma de selección:
 
-                                • Nombre del Candidato: {nom}
-                                • Puesto Postulado: {puesto_sel}
-                                • Email de Contacto: {email}
-                                • Teléfono: {telef if telef else 'No especificado'}
+  • Nombre del Candidato: {nom}
+  • Puesto Postulado: {puesto_sel}
+  • Email de Contacto: {email}
+  • Teléfono: {telef if telef else 'No especificado'}
 
-                                Ya puedes revisar su ficha completa en el Panel de RRHH.
+🔗 Puedes revisar la ficha completa y descargar el CV aquí:
+https://biofactor-rrhh.streamlit.app
 
-                                --
-                                Sistema de Gestión de Talentos - Biofactor
-                                """
+--
+Sistema de Gestión de Talentos - Biofactor
+"""
                                 enviar_notificacion_email(asunto_nuevo, cuerpo_nuevo)
 
                                 st.success(f"¡{nom} registrado con éxito y notificación enviada!")
