@@ -77,13 +77,21 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- FUNCIÓN DE ENVÍO DE NOTIFICACIONES POR CORREO ---
-def enviar_notificacion_email(asunto, cuerpo):
-    """Envía un correo electrónico SMTP a los destinatarios configurados en Secrets."""
+def enviar_notificacion_email(asunto, cuerpo, destinatario_especifico=None):
+    """
+    Envía un correo electrónico SMTP.
+    Si se pasa 'destinatario_especifico', solo se envía a ese mail.
+    De lo contrario, se envía a todos los destinatarios de Secrets.
+    """
     if "email" not in st.secrets:
         return False
 
     cfg = st.secrets["email"]
-    destinatarios = [cfg["destinatario_rrhh"], cfg["destinatario_extra"]]
+    
+    if destinatario_especifico:
+        destinatarios = [destinatario_especifico]
+    else:
+        destinatarios = [cfg["destinatario_rrhh"], cfg["destinatario_extra"]]
 
     msg = MIMEMultipart()
     msg['From'] = cfg["sender_email"]
@@ -153,7 +161,7 @@ def obtener_postulaciones_optimizado():
                 joinedload(Postulacion.candidato).defer(Candidato.archivo_cv),
                 joinedload(Postulacion.vacante)
             ).all()
-        session.expunge_all() # Desconecta de la sesión para ser mutable en cache
+        session.expunge_all()
         return results
     except Exception:
         return []
@@ -208,15 +216,15 @@ ETAPAS_ACTIVAS = [
 # Auxiliar para colores de badges de estado
 def obtener_color_badge(estado):
     if estado == "Contratado":
-        return "#dcfce7", "#166534" # Verde
+        return "#dcfce7", "#166534"
     elif estado in ["No Aplica", "Rechazado"]:
-        return "#fee2e2", "#991b1b" # Rojo
+        return "#fee2e2", "#991b1b"
     elif estado == "Aplica":
-        return "#e0f2fe", "#075985" # Azul
+        return "#e0f2fe", "#075985"
     elif estado == "Archivado Histórico":
-        return "#f3f4f6", "#6b7280" # Gris oscuro
+        return "#f3f4f6", "#6b7280"
     else:
-        return "#f1f5f9", "#334155" # Gris neutro
+        return "#f1f5f9", "#334155"
 
 # Auxiliar para WhatsApp
 def obtener_link_whatsapp(telefono_str):
@@ -231,10 +239,6 @@ def obtener_link_whatsapp(telefono_str):
 
 # --- FUNCIÓN DE LIMPIEZA Y ARCHIVADO (90 DÍAS) ---
 def archivar_postulantes_antiguos(dias_limite=90):
-    """
-    Busca postulantes en 'No Aplica' que llevan más de X días en la base de datos,
-    elimina el binario del PDF para liberar espacio en la BD y cambia su estado a 'Archivado Histórico'.
-    """
     session = get_session()
     try:
         postulaciones_descartadas = session.query(Postulacion).join(Candidato).filter(
@@ -251,7 +255,7 @@ def archivar_postulantes_antiguos(dias_limite=90):
             contador += 1
             
         session.commit()
-        st.cache_data.clear() # Limpiamos caché para refrescar vistas
+        st.cache_data.clear()
         return contador
     except Exception:
         session.rollback()
@@ -297,7 +301,6 @@ def renderizar_tarjeta_candidato(post):
 
         with info_col3:
             st.caption("CURRÍCULUM")
-            # Carga diferida bajo demanda del binario PDF
             if cand.ruta_cv:
                 archivo_bytes = descargar_cv_por_id(cand.id)
                 if archivo_bytes:
@@ -343,10 +346,15 @@ def renderizar_tarjeta_candidato(post):
                         p.estado_proceso = nuevo_est
                         p.notes = nuevas_notas
                         session.commit()
-                        st.cache_data.clear() # Invalida la caché de búsquedas
+                        st.cache_data.clear()
                         
-                        # ✉️ ENVÍO DE CORREO AUTOMÁTICO SI CAMBIÓ DE ESTADO O NOTAS
+                        # ✉️ ENVÍO DE CORREO DIRIGIDO SEGÚN EL CAMBIO DE ETAPA
                         if estado_anterior != nuevo_est or nuevas_notas != post.notes:
+                            if nuevo_est == "Entrevista Director Comercial":
+                                destinatario_destino = st.secrets["email"]["destinatario_extra"]
+                            else:
+                                destinatario_destino = st.secrets["email"]["destinatario_rrhh"]
+
                             asunto_mail = f"🔄 Cambio de Estado: {cand.nombre} — {vac.titulo}"
                             cuerpo_mail = f"""
 Hola,
@@ -365,7 +373,7 @@ https://biofactor-rrhh.streamlit.app
 --
 Sistema de Gestión de Talentos - Biofactor
 """
-                            enviar_notificacion_email(asunto_mail, cuerpo_mail)
+                            enviar_notificacion_email(asunto_mail, cuerpo_mail, destinatario_especifico=destinatario_destino)
 
                         st.success("Guardado correctamente.")
                         st.rerun()
@@ -436,7 +444,6 @@ tab1, tab2, tab3 = st.tabs(["📋 Panel de Postulantes", "➕ Cargar Candidato (
 with tab1:
     postulaciones_db = obtener_postulaciones_optimizado()
 
-    # Cálculo rápido de métricas sobre datos cacheados
     total_todos = sum(1 for p in postulaciones_db if p.estado_proceso != "Archivado Histórico")
     total_activos = sum(1 for p in postulaciones_db if p.estado_proceso in ETAPAS_ACTIVAS)
     total_contratados = sum(1 for p in postulaciones_db if p.estado_proceso == "Contratado")
@@ -445,7 +452,6 @@ with tab1:
     if "filtro_estado" not in st.session_state:
         st.session_state.filtro_estado = "Todos"
 
-    # Tarjetas de Métricas / Filtros Rápidos superiores
     m1, m2, m3, m4 = st.columns(4)
     with m1:
         if st.button(f"👥 Activos ({total_todos})", use_container_width=True, type="primary" if st.session_state.filtro_estado == "Todos" else "secondary"):
@@ -466,7 +472,6 @@ with tab1:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Filtros de Puesto y Búsqueda
     vacantes_db = obtener_vacantes_cached()
     opciones_puestos = ["Todos los Puestos"] + [v.titulo for v in vacantes_db]
 
@@ -478,7 +483,6 @@ with tab1:
 
     st.markdown("<hr style='border:none; border-top: 1px solid #e2e8f0; margin: 20px 0;'>", unsafe_allow_html=True)
 
-    # Filtrado de Candidatos en memoria
     postulaciones_filtradas = []
     for post in postulaciones_db:
         if post.estado_proceso == "Archivado Histórico" and not busqueda:
@@ -508,7 +512,6 @@ with tab1:
 
             postulaciones_filtradas.append(post)
 
-    # Paginador simple para acelerar la vista del DOM
     POSTULANTES_POR_PAGINA = 15
     total_postulantes = len(postulaciones_filtradas)
 
@@ -524,13 +527,11 @@ with tab1:
         else:
             postulaciones_pagina = postulaciones_filtradas
 
-        # Renderizado optimizado
         for post in postulaciones_pagina:
             renderizar_tarjeta_candidato(post)
     else:
         st.info("No se encontraron postulantes con los filtros seleccionados.")
 
-    # --- BOTÓN DE MANTENIMIENTO ---
     st.markdown("<br><br>", unsafe_allow_html=True)
     if st.button("📦 Archivar y liberar espacio de descartados +90 dias", use_container_width=False):
         procesados = archivar_postulantes_antiguos(dias_limite=90)
@@ -608,9 +609,10 @@ with tab2:
                                     notes="CV registrado en el sistema."
                                 ))
                                 session_pdf.commit()
-                                st.cache_data.clear() # Limpia la caché al crear un nuevo candidato
+                                st.cache_data.clear()
                                 
-                                # ✉️ ENVÍO DE CORREO AUTOMÁTICO AL REGISTRAR NUEVO CV
+                                # ✉️ ENVÍO DE CORREO ÚNICAMENTE A RRHH AL CARGAR
+                                email_rrhh = st.secrets["email"]["destinatario_rrhh"]
                                 asunto_nuevo = f"📄 Nuevo CV Cargado: {nom} — {puesto_sel}"
                                 cuerpo_nuevo = f"""
 Hola,
@@ -628,9 +630,9 @@ https://biofactor-rrhh.streamlit.app
 --
 Sistema de Gestión de Talentos - Biofactor
 """
-                                enviar_notificacion_email(asunto_nuevo, cuerpo_nuevo)
+                                enviar_notificacion_email(asunto_nuevo, cuerpo_nuevo, destinatario_especifico=email_rrhh)
 
-                                st.success(f"¡{nom} registrado con éxito y notificación enviada!")
+                                st.success(f"¡{nom} registrado con éxito y notificación enviada a RRHH!")
                                 st.rerun()
                         except Exception as e:
                             session_pdf.rollback()
@@ -659,7 +661,7 @@ with tab3:
             try:
                 session_v.add(Vacante(titulo=nuevo_titulo, departamento=depto_seleccionado, estado="Abierta"))
                 session_v.commit()
-                st.cache_data.clear() # Limpia la caché al agregar puesto
+                st.cache_data.clear()
                 st.success(f"Puesto '{nuevo_titulo}' creado con éxito.")
                 st.rerun()
             except Exception as e:
