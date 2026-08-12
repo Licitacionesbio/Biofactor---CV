@@ -5,6 +5,9 @@ from crear_base import Candidato, Vacante, Postulacion, Base
 import pypdf
 import re
 from datetime import datetime, timedelta
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(page_title="Biofactor RRHH", layout="wide", initial_sidebar_state="collapsed")
@@ -72,6 +75,32 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# --- FUNCIÓN DE ENVÍO DE NOTIFICACIONES POR CORREO ---
+def enviar_notificacion_email(asunto, cuerpo):
+    """Envía un correo electrónico SMTP a los destinatarios configurados en Secrets."""
+    if "email" not in st.secrets:
+        return False
+
+    cfg = st.secrets["email"]
+    destinatarios = [cfg["destinatario_rrhh"], cfg["destinatario_extra"]]
+
+    msg = MIMEMultipart()
+    msg['From'] = cfg["sender_email"]
+    msg['To'] = ", ".join(destinatarios)
+    msg['Subject'] = asunto
+    msg.attach(MIMEText(cuerpo, 'plain', 'utf-8'))
+
+    try:
+        server = smtplib.SMTP(cfg["smtp_server"], int(cfg["smtp_port"]))
+        server.starttls()
+        server.login(cfg["sender_email"], cfg["sender_password"])
+        server.sendmail(cfg["sender_email"], destinatarios, msg.as_string())
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Error al enviar correo: {e}")
+        return False
 
 # --- CONEXIÓN A BASE DE DATOS ---
 @st.cache_resource
@@ -310,10 +339,31 @@ def renderizar_tarjeta_candidato(post):
                     session = SessionFactory()
                     try:
                         p = session.query(Postulacion).get(post.id)
+                        estado_anterior = p.estado_proceso
                         p.estado_proceso = nuevo_est
                         p.notes = nuevas_notas
                         session.commit()
                         st.cache_data.clear() # Invalida la caché de búsquedas
+                        
+                        # ✉️ ENVÍO DE CORREO AUTOMÁTICO SI CAMBIÓ DE ESTADO O NOTAS
+                        if estado_anterior != nuevo_est or nuevas_notas != post.notes:
+                            asunto_mail = f"🔄 Cambio de Estado: {cand.nombre} — {vac.titulo}"
+                            cuerpo_mail = f"""
+                            Hola,
+
+                            Se ha actualizado el estado de un postulante en la plataforma:
+
+                            • Candidato: {cand.nombre}
+                            • Puesto: {vac.titulo}
+                            • Estado Anterior: {estado_anterior}
+                            • Nuevo Estado: {nuevo_est}
+                            • Notas / Comentarios: {nuevas_notas if nuevas_notas else 'Sin notas'}
+
+                            --
+                            Sistema de Gestión de Talentos - Biofactor
+                            """
+                            enviar_notificacion_email(asunto_mail, cuerpo_mail)
+
                         st.success("Guardado correctamente.")
                         st.rerun()
                     except Exception as e:
@@ -556,7 +606,27 @@ with tab2:
                                 ))
                                 session_pdf.commit()
                                 st.cache_data.clear() # Limpia la caché al crear un nuevo candidato
-                                st.success(f"¡{nom} registrado con éxito!")
+                                
+                                # ✉️ ENVÍO DE CORREO AUTOMÁTICO AL REGISTRAR NUEVO CV
+                                asunto_nuevo = f"📄 Nuevo CV Cargado: {nom} — {puesto_sel}"
+                                cuerpo_nuevo = f"""
+                                Hola,
+
+                                Se ha cargado un nuevo currículum en la plataforma de selección:
+
+                                • Nombre del Candidato: {nom}
+                                • Puesto Postulado: {puesto_sel}
+                                • Email de Contacto: {email}
+                                • Teléfono: {telef if telef else 'No especificado'}
+
+                                Ya puedes revisar su ficha completa en el Panel de RRHH.
+
+                                --
+                                Sistema de Gestión de Talentos - Biofactor
+                                """
+                                enviar_notificacion_email(asunto_nuevo, cuerpo_nuevo)
+
+                                st.success(f"¡{nom} registrado con éxito y notificación enviada!")
                                 st.rerun()
                         except Exception as e:
                             session_pdf.rollback()
